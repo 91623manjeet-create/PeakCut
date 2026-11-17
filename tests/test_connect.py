@@ -5,6 +5,7 @@ from urllib.parse import parse_qs, urlparse
 os.environ["PEAKCUT_DATA"] = tempfile.mkdtemp(prefix="pc-connect-")
 os.environ.update(DATABASE_URL="", PEAKCUT_ACCOUNTS="1", PEAKCUT_PUBLIC_URL="https://clips.example.com", PEAKCUT_VERIFY_EMAIL="0",
                   GOOGLE_CLIENT_ID="", GOOGLE_CLIENT_SECRET="", GOOGLE_CLIENT_FILE="", PEAKCUT_IG_APP_ID="", PEAKCUT_IG_APP_SECRET="",
+                  PEAKCUT_IG_CONFIG_ID="",
                   PEAKCUT_TIKTOK_CLIENT_KEY="", PEAKCUT_TIKTOK_CLIENT_SECRET="")
 sys.path.insert(0, ".")
 from pathlib import Path
@@ -60,6 +61,7 @@ class R:
             raise ValueError
         return self._d
 calls, uploads, tt = [], [], {"audited": False, "status": 0}
+fb = {"shared": [{"id": "17899", "username": "vicecity_bloopers"}]}   # what Meta's newer login hands back
 def post(url, data=None, json=None, headers=None, params=None, timeout=None, content=None):
     calls.append(("POST", url, data or json, headers or {}))
     if url == "https://oauth2.googleapis.com/token":
@@ -90,6 +92,10 @@ def post(url, data=None, json=None, headers=None, params=None, timeout=None, con
         return R(200, {"id": "container1"})
     if url.endswith("/17841/media_publish"):
         return R(200, {"id": "media1"})
+    if url.endswith("/17899/media"):
+        return R(200, {"id": "container2"})
+    if url.endswith("/17899/media_publish"):
+        return R(200, {"id": "media2"})
     return R(404, {})
 def get(url, params=None, headers=None, timeout=None):
     calls.append(("GET", url, params, headers or {}))
@@ -99,6 +105,19 @@ def get(url, params=None, headers=None, timeout=None):
         return R(200, {"access_token": "ig-long", "token_type": "bearer", "expires_in": 5183944})
     if url == "https://graph.instagram.com/me":
         return R(200, {"user_id": "17841", "username": "clipper", "account_type": "MEDIA_CREATOR"})
+    if url == "https://graph.facebook.com/v27.0/oauth/access_token":
+        fb["redirect"] = (params or {}).get("redirect_uri", "")
+        if (params or {}).get("code") != "fbcode":
+            return R(400, {"error": {"message": "bad code"}})
+        return R(200, {"access_token": "fb-long", "token_type": "bearer", "expires_in": 5184000})
+    if url == "https://graph.facebook.com/v27.0/me":
+        return R(200, {"id": "147000", "client_business_id": "1500440641933545"})
+    if url == "https://graph.facebook.com/v27.0/me/assigned_instagram_accounts":
+        return R(200, {"data": fb["shared"]})
+    if url.endswith("/container2"):
+        return R(200, {"status_code": "FINISHED"})
+    if url.endswith("/media2"):
+        return R(200, {"permalink": "https://www.instagram.com/reel/xyz/"})
     if url.endswith("/container1"):
         return R(200, {"status_code": "FINISHED"})
     if url.endswith("/media1"):
@@ -186,6 +205,43 @@ with ctx.as_user(user.id):
     acc = accounts.get(ttacc["id"]); acc["expires"] = 0; accounts._put(acc)
     accounts._tt_token(accounts.get(ttacc["id"]))
     check("TikTok: an old sign-in is renewed, and the new refresh token kept", accounts.get(ttacc["id"])["refresh_token"], "tt-refresh-2")
+
+# ---- Instagram through Meta's newer apps, which use a login configuration ("unified login")
+r = a.put("/api/apps", json={"platform": "instagram", "client_id": "1234567890", "client_secret": "instagram-secret-value",
+                             "config_id": "12ab3"}, headers=ORIGIN)
+check("Instagram: a login configuration that is not digits is refused", r.status_code, 400)
+r = a.put("/api/apps", json={"platform": "instagram", "client_id": "1234567890", "client_secret": "instagram-secret-value",
+                             "config_id": "955475480761934"}, headers=ORIGIN)
+check("Instagram: the login configuration is saved and shown back", (r.status_code, r.json()["instagram"]["config_hint"]),
+      (200, "955475480761934"))
+loc, back = connect(b, "instagram", "fbcode")
+q = parse_qs(loc.query)
+check("Instagram with a configuration: Facebook's page, carrying the configuration",
+      (loc.netloc, loc.path, q["client_id"][0], q["config_id"][0], "scope" in q),
+      ("www.facebook.com", "/dialog/oauth", "1234567890", "955475480761934", False))
+check("Instagram with a configuration: connected", "connected=instagram" in back.headers["location"])
+check("Instagram with a configuration: the code is exchanged with the address Meta sent it back to",
+      fb["redirect"], BASE + "/oauth/instagram/callback")
+unified = next(x for x in b.get("/api/accounts").json() if x["platform"] == "instagram" and x["name"] == "@vicecity_bloopers")
+with ctx.as_user(user.id):
+    saved = accounts.get(unified["id"])
+check("Instagram with a configuration: the account, its business portfolio and its token are kept",
+      (saved["user_id"], saved["api"], saved["business_id"]), ("17899", "facebook", "1500440641933545"))
+with ctx.as_user(user.id):
+    calls.clear()
+    rid, url = accounts.instagram_upload(accounts.get(unified["id"]), jd / "clip01.mp4", "My caption", "job-12345678")
+    made = next(c for c in calls if c[1].endswith("/17899/media"))
+    check("Instagram with a configuration: a Reel, posted on graph.facebook.com",
+          (made[1].startswith("https://graph.facebook.com/"), made[2]["media_type"], rid, url),
+          (True, "REELS", "media2", "https://www.instagram.com/reel/xyz/"))
+    old = accounts.get(unified["id"]); old["token_time"] = 0; accounts._put(old)
+    accounts._ig_token(accounts.get(unified["id"]))
+    check("Instagram with a configuration: its token never expires, so it is not renewed",
+          any(c[1].endswith("/refresh_access_token") for c in calls), False)
+fb["shared"] = []
+loc, back = connect(b, "instagram", "fbcode")
+check("Instagram with a configuration: no account ticked says why", "connect_error" in back.headers["location"])
+fb["shared"] = [{"id": "17899", "username": "vicecity_bloopers"}]
 
 print("ALL PASSED" if not fails else f"{len(fails)} failed")
 import shutil; db.engine.dispose(); shutil.rmtree(os.environ["PEAKCUT_DATA"], ignore_errors=True)
