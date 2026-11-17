@@ -21,6 +21,8 @@ CLAUDE.local.md
 .vscode/
 .idea/
 *.bat
+browser-shots/
+.playwright-mcp/
 Thumbs.db
 .DS_Store
 

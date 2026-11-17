@@ -23,6 +23,9 @@ are there, and only then offer to delete the old folder. Never delete anything w
 - The speech model (about 480 MB) downloads by itself on first start; `python -m studio.fetch_model` gets it ahead of time.
 - Tests: `python tests/run.py`. It starts a throwaway copy on a spare port with an empty data folder. Run it
   before and after any change to `studio/`. No keys needed.
+- The last check in the suite opens the real pages in Chromium through Playwright. That part needs the extras
+  (`pip install -r requirements-dev.txt`, then `python -m playwright install chromium`); without them it says so
+  and passes. Screenshots of each page land in `browser-shots/`.
 - To try a risky change by hand without touching real data:
   `PEAKCUT_DATA=<temp folder> PEAKCUT_PORT=8766 python -m studio.server`.
 
