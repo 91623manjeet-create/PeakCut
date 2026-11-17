@@ -27,7 +27,7 @@ check("Korean too", roman.to_roman("안녕하세요"), "annyeonghaseyo")
 check("accented Latin letters are left alone and can be drawn", (roman.to_roman("niño été"), roman.drawable("niño été")), ("niño été", True))
 check("Japanese cannot be drawn by the caption fonts", roman.drawable("こんにちは"), False)
 
-ass = render.build_ass(ws("こんにちは 世界 今日は いい 天気 です"), 0, 6, "HOOK", "bounce", [], 300, 1380)
+ass = render.build_ass(ws("こんにちは 世界 今日は いい 天気 です"), 0, 6, "HOOK", "bounce", [], 300, 1380)[0]
 cap = events(ass)
 check("a script the font lacks is drawn as whole centred lines, not word by word", all("\\q0" in l and "\\pos(540," in l for _, _, l in cap) and len(cap) >= 2)
 check("...one line at a time, never two at once", all(cap[i][1] <= cap[i + 1][0] + 0.011 for i in range(len(cap) - 1)))
@@ -35,7 +35,7 @@ check("...one line at a time, never two at once", all(cap[i][1] <= cap[i + 1][0]
 # ---- words whose times run into each other (a translation squeezed into a short line, a doubled transcript)
 messy = [{"w": "one", "s": 0.0, "e": 2.5}, {"w": "two", "s": 0.3, "e": 2.6}, {"w": "three", "s": 0.6, "e": 2.7},
          {"w": "four", "s": 0.5, "e": 3.0}, {"w": "five", "s": 1.4, "e": 1.2}, {"w": "six", "s": 1.6, "e": 4.0}]
-cap = events(render.build_ass(messy, 0, 5, "", "bounce", [], 300, 1380))
+cap = events(render.build_ass(messy, 0, 5, "", "bounce", [], 300, 1380)[0])
 def shown_together(evs):
     """The most different caption groups (rows of words) on screen at any moment."""
     worst = 0

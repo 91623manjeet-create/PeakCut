@@ -112,7 +112,7 @@ def main(data):
             # --- caption speed: a line leaves the screen with the voice, not when the next one starts
             spoken = [{"w": "hello", "s": 0.5, "e": 0.9}, {"w": "world", "s": 1.0, "e": 1.5},
                       {"w": "again", "s": 2.3, "e": 2.7}]       # a gap between the two lines, then silence to 6.0
-            when = lambda pace, text: last_end(render.build_ass(spoken, 0.0, 6.0, "", "clean", [], 300, 1500, pace), text)
+            when = lambda pace, text: last_end(render.build_ass(spoken, 0.0, 6.0, "", "clean", [], 300, 1500, pace)[0], text)
             check("at normal speed a line goes off soon after its last word",
                   abs(when("normal", "world") - 1.85) < 0.05 and abs(when("normal", "again") - 3.3) < 0.05)
             check("slow speed keeps a line up longer, but never into the next line",
@@ -120,25 +120,30 @@ def main(data):
             check("fast speed takes a line off almost at once", abs(when("fast", "world") - 1.65) < 0.05)
             check("no speed stretches the last line to the end of the clip", when("normal", "again") < 5.0)
             brief = [{"w": "hi", "s": 0.0, "e": 0.2}]
-            flash = last_end(render.build_ass(brief, 0.0, 6.0, "", "clean", [], 300, 1500, "normal"), "hi")
+            flash = last_end(render.build_ass(brief, 0.0, 6.0, "", "clean", [], 300, 1500, "normal")[0], "hi")
             check("a very short line still shows long enough to read", abs(flash - 1.0) < 0.05)
             late = [{"w": "deep", "s": 273.5, "e": 274.0}, {"w": "in", "s": 274.2, "e": 274.5}]
-            mid = last_end(render.build_ass(late, 273.0, 279.0, "", "clean", [], 300, 1500, "normal"), "in")
+            mid = last_end(render.build_ass(late, 273.0, 279.0, "", "clean", [], 300, 1500, "normal")[0], "in")
             check("a clip that starts deep in the video still shows its captions",
                   mid is not None and abs(mid - 1.85) < 0.05)   # said until 1.5 on screen, off 0.35 later
 
-            # --- emojis: one per line, riding on a word that means something
+            # --- emojis: true-colour pictures over the words, one per line, riding on a word that means something
             talk = [{"w": "nice", "s": 0.5, "e": 0.9}, {"w": "car", "s": 1.0, "e": 1.4},
                     {"w": "money", "s": 2.2, "e": 2.6}, {"w": "fast", "s": 2.8, "e": 3.2}]
             with_e = render.build_ass(talk, 0.0, 8.0, "", "clean", [], 300, 1500, "normal", emoji=True)
             without_e = render.build_ass(talk, 0.0, 8.0, "", "clean", [], 300, 1500, "normal", emoji=False)
-            cap_lines = lambda a: [l for l in a.splitlines() if l.startswith("Dialogue") and ",Cap," in l]
+            cap_lines = lambda a: [l for l in a[0].splitlines() if l.startswith("Dialogue") and ",Cap," in l]
             check("a caption word gets a related emoji",
-                  any("car 🏎️" in l for l in cap_lines(with_e)) and any("money 💰" in l for l in cap_lines(with_e)))
-            check("at most one emoji per line", not any(l.count("🏎️") + l.count("💰") + l.count("⚡") > 1 for l in cap_lines(with_e)))
-            check("emojis can be turned off", not any("🏎️" in l or "💰" in l for l in cap_lines(without_e)))
-            check("an emoji gets a real width, not a gap",
+                  any(o["emoji"] == "🏎️" for o in with_e[1]) and any(o["emoji"] == "💰" for o in with_e[1]))
+            car = next(o for o in with_e[1] if o["emoji"] == "🏎️")
+            check("the emoji shows while its word is said", abs(car["s"] - 1.0) < 0.05)
+            check("the emoji sits next to its word, inside the frame", 0 < car["cx"] < 1080 and car["w"] > 20)
+            check("emojis can be turned off", without_e[1] == [])
+            check("the emoji is a painted picture, not a monochrome glyph in the text",
+                  not any("🏎" in l or "💰" in l for l in cap_lines(with_e)))
+            check("an emoji still gets a real width, not a gap",
                   render._Font.get("Poppins ExtraBold").width("car 🏎️", 100) > render._Font.get("Poppins ExtraBold").width("car", 100) * 1.1)
+            check("the emoji picture can be painted", render._emoji_img("🏎️", 80) is not None)
 
             check("the default caption speed is normal", jobs.create(source, {}, enqueue=False)["options"]["pace"] == "normal")
             check("a video can pick a caption speed", jobs.create(source, {"pace": "slow"}, enqueue=False)["options"]["pace"] == "slow")

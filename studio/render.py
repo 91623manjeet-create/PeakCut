@@ -33,7 +33,7 @@ PACE = {"slow": {"label": "Slow", "tail": 0.9, "hold": 1.6},
         "fast": {"label": "Fast", "tail": 0.15, "hold": 0.5}}
 
 # Emojis that ride along with a caption word: one per line at most, matched on the word as spoken.
-# They are drawn in the caption's own colour (the emoji font's glyphs take it on), so they pop with it.
+# They are painted over the words as true-colour pictures at the word's own place and time.
 EMOJIS = {"car": "🏎️", "drift": "🏎️", "drive": "🚗", "driving": "🚗", "race": "🏁", "racing": "🏁",
           "win": "🏆", "wins": "🏆", "won": "🏆", "winner": "🏆", "trophy": "🏆",
           "lose": "😭", "loses": "😭", "lost": "😭", "loser": "😭",
@@ -65,6 +65,32 @@ EMOJIS = {"car": "🏎️", "drift": "🏎️", "drive": "🚗", "driving": "�
 def _is_emoji(ch):
     o = ord(ch)
     return o == 0xFE0F or o == 0x200D or 0x2600 <= o <= 0x27BF or 0x2B00 <= o <= 0x2BFF or 0x1F000 <= o <= 0x1FAFF
+
+
+_emoji_font = None
+
+
+def _emoji_img(ch, px):
+    """The emoji as a transparent picture in full colour, drawn by the machine's emoji font. None when
+    the machine has no colour emoji font: the words then simply carry no emoji rather than a broken one."""
+    global _emoji_font
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+        if _emoji_font is None:
+            ej = Path(os.environ.get("WINDIR", r"C:\Windows")) / "Fonts" / "seguiemj.ttf"
+            _emoji_font = ImageFont.truetype(str(ej), 256) if ej.is_file() else False
+        if _emoji_font is False:
+            return None
+        img = Image.new("RGBA", (340, 340), (0, 0, 0, 0))
+        ImageDraw.Draw(img).text((42, 20), ch, font=_emoji_font, embedded_color=True)
+        box = img.getbbox()
+        if not box:
+            return None
+        img = img.crop(box)
+        img.thumbnail((px, px))          # keeps its shape, never grows past the box saved for it
+        return img
+    except Exception:  # noqa: BLE001 - no emoji font or no picture library: captions still render
+        return None
 
 
 class _Font:
@@ -212,7 +238,10 @@ def _hook_events(hook, dur, y):
     return ev
 
 
-def build_ass(words, start, end, hook, style_name, highlight, hook_y, cap_y, pace="normal", emoji=True) -> str:
+def build_ass(words, start, end, hook, style_name, highlight, hook_y, cap_y, pace="normal", emoji=True):
+    """The captions as a subtitle script, plus the emojis to paint over it: (script, overlays).
+    An overlay is {"emoji", "cx", "cy", "w", "s", "e"} — a picture of that emoji, centred on (cx, cy)
+    in the 1080x1920 frame, one caption em tall, on screen from second s to second e of the clip."""
     st = STYLES.get(style_name, STYLES["bounce"])
     pc = PACE.get(pace, PACE["normal"])
     words = [dict(w, s=w["s"] - CAPTION_LEAD, e=w["e"] - CAPTION_LEAD) for w in words]
@@ -234,6 +263,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
     dur = end - start
     ev = _hook_events(_clean(hook), dur, hook_y)
+    overlays = []
     f = _Font.get(st["font"])
     inside = [dict(w, w=_clean(w["w"])) for w in words if w["s"] >= start - 0.05 and w["s"] < end]
     inside = sorted((w for w in inside if w["w"]), key=lambda w: w["s"])
@@ -252,10 +282,10 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         for x in g:
             t = re.sub(r"[.,;:]+$", "", x["w"])
             texts.append(t.upper() if st["upper"] else t)
-        if emoji:      # one related emoji per line, riding on the word it matches, popping with it
-            hit = next((i for i, x in enumerate(g) if _key(re.sub(r"[.,;:]+$", "", x["w"])) in EMOJIS), None)
-            if hit is not None and not _is_emoji(texts[hit][-1]):
-                texts[hit] += " " + EMOJIS[_key(re.sub(r"[.,;:]+$", "", g[hit]["w"]))]
+        hit = None      # one related emoji per line, riding on the word it matches
+        if emoji:
+            hit = next((i for i, x in enumerate(g) if _key(re.sub(r"[.,;:]+$", "", x["w"])) in EMOJIS
+                        and not any(_is_emoji(c) for c in texts[i])), None)
         if not all(roman.drawable(t) for t in texts):
             # A script the caption font cannot draw (Japanese, Thai, Chinese...): its words cannot be measured, so
             # they are not placed one by one. The line is drawn whole and centred, in a font the system has for it.
@@ -265,19 +295,29 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             continue
         size = st["size"]
         gap = f.width("n n", size) - 2 * f.width("n", size) + (2 * st["outline"] + 6) * size / st["size"]   # a space, plus room for both outlines
-        total = sum(f.width(t, size) for t in texts) + gap * (len(texts) - 1)
+        ew = 0 if hit is None else f.em(size)                       # the emoji gets a box one caption em tall
+        extra = gap + ew if hit is not None else 0
+        total = sum(f.width(t, size) for t in texts) + gap * (len(texts) - 1) + extra
         if total > CAP_MAX_W:                                  # a long phrase: shrink it to fit, never run off the frame
             size = max(36, int(size * CAP_MAX_W / total))
             gap = f.width("n n", size) - 2 * f.width("n", size) + (2 * st["outline"] + 6) * size / st["size"]   # a space, plus room for both outlines
-            total = sum(f.width(t, size) for t in texts) + gap * (len(texts) - 1)
+            ew = 0 if hit is None else f.em(size)
+            extra = gap + ew if hit is not None else 0
+            total = sum(f.width(t, size) for t in texts) + gap * (len(texts) - 1) + extra
         cy = cap_y - f.cap_shift(size)
         x = (W - total) / 2
         p = st["pop"]
         for i, (w, t) in enumerate(zip(g, texts)):
             wd = f.width(t, size)
+            if i == hit:      # the emoji takes the place after its word, and shows while that word is said
+                overlays.append({"emoji": EMOJIS[_key(re.sub(r"[.,;:]+$", "", w["w"]))],
+                                 "cx": x + wd + gap + ew / 2, "cy": cy, "w": ew,
+                                 "s": max(g_start, w["s"] - start), "e": g_end})
             p = max(104, min(st["pop"], 100 + int(2200 / max(wd, 1))))   # long words grow less, so they never touch their neighbours
             pos = f"\\an5\\pos({x + wd / 2:.0f},{cy:.0f})\\fs{size}"
             x += wd + gap
+            if i == hit:
+                x += ew
             a = max(g_start, w["s"] - start)
             b = (g[i + 1]["s"] - start) if i + 1 < len(g) else g_end
             base = st["strong"] if _key(w["w"]) in strong else st["base"]
@@ -289,7 +329,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             if g_end - b >= 0.02:                                                     # said
                 ev.append(f"Dialogue: 1,{_ts(b)},{_ts(g_end)},Cap,,0,0,0,,{{{pos}\\c&H{base}&\\fscx{p - 5}\\fscy{p - 5}"
                           f"\\t(0,90,\\fscx100\\fscy100)}}{t}")
-    return head + "\n".join(ev) + "\n"
+    return head + "\n".join(ev) + "\n", overlays
 
 
 PIP_W = 380            # how wide the facecam is in the 1080-wide frame
@@ -337,15 +377,15 @@ def render_clip(src: Path, out_dir: Path, name: str, clip: dict, words: list, sr
     if layout == "gameplay" and not (face and len(face) == 4):
         layout = "crop"     # no webcam found: the game fills the screen, which is still the right shape
     hook_y = _hook_y(layout, hook_y, face)
-    ass = build_ass(words if clip.get("captions", True) else [], start, end, clip.get("hook", ""), clip.get("style", "bounce"),
-                    clip.get("highlight_words", []), hook_y, cap_y, clip.get("pace", "normal"), clip.get("emoji", True))
+    ass, overlays = build_ass(words if clip.get("captions", True) else [], start, end, clip.get("hook", ""), clip.get("style", "bounce"),
+                              clip.get("highlight_words", []), hook_y, cap_y, clip.get("pace", "normal"), clip.get("emoji", True))
     # The clip is made in a short work folder and moved into place afterwards. The caption step of ffmpeg cannot
     # open files whose full path is longer than 260 characters on Windows, which a data folder deep inside other
     # folders easily reaches. Inside the work folder every name is short and relative (a drive colon would also
     # break the filter syntax).
     work = Path(tempfile.mkdtemp(prefix="pk"))
     try:
-        return _render_in(work, src, out_dir, name, start, end, layout, fg_h, ass, face=face)
+        return _render_in(work, src, out_dir, name, start, end, layout, fg_h, ass, face=face, overlays=overlays)
     finally:
         shutil.rmtree(work, ignore_errors=True)
 
@@ -386,33 +426,56 @@ def preview_frame(src: Path, clip: dict, words: list, src_w: int, src_h: int, at
     if layout == "gameplay" and not (face and len(face) == 4):
         layout = "crop"     # same fallback the real render uses
     hook_y = _hook_y(layout, hook_y, face)
-    ass = _ass_at(build_ass(words if clip.get("captions", True) else [], local["start"], local["end"], local["hook"],
-                            local.get("style", "bounce"), local.get("highlight_words", []), hook_y, cap_y,
-                            local.get("pace", "normal"), local.get("emoji", True)), r)
+    ass, overlays = build_ass(words if clip.get("captions", True) else [], local["start"], local["end"], local["hook"],
+                              local.get("style", "bounce"), local.get("highlight_words", []), hook_y, cap_y,
+                              local.get("pace", "normal"), local.get("emoji", True))
     work = Path(tempfile.mkdtemp(prefix="pk"))
     try:
-        (work / "p.ass").write_text(ass, encoding="utf-8")
+        (work / "p.ass").write_text(_ass_at(ass, r), encoding="utf-8")
         (work / "f").mkdir()
         for f in config.FONTS_DIR.glob("*.ttf"):
             shutil.copyfile(f, work / "f" / f.name)
         fc = _filter(layout, fg_h, face if layout == "gameplay" else None) + "[v0]ass=p.ass:fontsdir=f[v]"
         run(["ffmpeg", "-y", "-v", "error", "-ss", f"{local['start'] + r:.2f}", "-i", str(src), "-map", "[v]",
              "-filter_complex", fc, "-frames:v", "1", "-q:v", "3", "p.jpg"], cwd=work)
+        active = [o for o in overlays if o["s"] <= r < o["e"]]     # the emojis said at this very moment
+        if active:
+            from PIL import Image
+            im = Image.open(work / "p.jpg").convert("RGBA")
+            for o in active:
+                img = _emoji_img(o["emoji"], int(o["w"]))
+                if img is not None:
+                    im.alpha_composite(img, (int(o["cx"] - img.width / 2), int(o["cy"] - img.height / 2)))
+            im.convert("RGB").save(work / "p.jpg", quality=90)
         return (work / "p.jpg").read_bytes()
     finally:
         shutil.rmtree(work, ignore_errors=True)
 
 
-def _render_in(work: Path, src: Path, out_dir: Path, name: str, start, end, layout, fg_h, ass: str, face=None) -> dict:
+def _render_in(work: Path, src: Path, out_dir: Path, name: str, start, end, layout, fg_h, ass: str, face=None, overlays=()) -> dict:
     global _qsv_ok
     (work / f"{name}.ass").write_text(ass, encoding="utf-8")
     (work / "f").mkdir()
     for f in config.FONTS_DIR.glob("*.ttf"):
         shutil.copyfile(f, work / "f" / f.name)
-    fc = _filter(layout, fg_h, face) + f"[v0]ass={name}.ass:fontsdir=f[v]"
-    base = ["ffmpeg", "-y", "-v", "error", "-ss", f"{start:.2f}", "-t", f"{end - start:.2f}", "-i", str(src),
-            "-filter_complex", fc, "-map", "[v]", "-map", "0:a:0", "-af", "loudnorm=I=-14:TP=-1.5:LRA=11",
-            "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-movflags", "+faststart", "-pix_fmt"]
+    cmd = ["ffmpeg", "-y", "-v", "error", "-ss", f"{start:.2f}", "-t", f"{end - start:.2f}", "-i", str(src)]
+    painted = []      # (input number, where and when the emoji shows, its picture) — true-colour emojis over the words
+    for i, o in enumerate(overlays):
+        img = _emoji_img(o["emoji"], int(o["w"]))
+        if img is None:
+            continue
+        img.save(work / f"e{i}.png")
+        cmd += ["-i", f"e{i}.png"]     # one frame, held for the whole clip: enable shows it only while its word is said
+        painted.append((i, o, img))
+    fc = _filter(layout, fg_h, face) + f"[v0]ass={name}.ass:fontsdir=f" + ("[va]" if painted else "[v]")
+    prev = "va"
+    for k, (i, o, img) in enumerate(painted):
+        x, y = o["cx"] - img.width / 2, o["cy"] - img.height / 2
+        out = "v" if k == len(painted) - 1 else f"vb{i}"
+        fc += f";[{prev}][{i + 1}:v]overlay={x:.0f}:{y:.0f}:enable='between(t,{o['s']:.2f},{o['e']:.2f})'[{out}]"
+        prev = out
+    base = cmd + ["-filter_complex", fc, "-map", "[v]", "-map", "0:a:0", "-af", "loudnorm=I=-14:TP=-1.5:LRA=11",
+                  "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-movflags", "+faststart", "-pix_fmt"]
     encoders = []
     if _qsv_ok is not False:
         encoders.append(("qsv", ["nv12", "-c:v", "h264_qsv", "-global_quality", "23", "-preset", "fast"]))
