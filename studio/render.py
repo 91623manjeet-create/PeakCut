@@ -1,4 +1,5 @@
 """Turns a time range into a vertical clip: 9:16 layout, bouncy word captions, hook title, cover."""
+import os
 import re
 import shutil
 import subprocess
@@ -31,6 +32,40 @@ PACE = {"slow": {"label": "Slow", "tail": 0.9, "hold": 1.6},
         "normal": {"label": "Normal", "tail": 0.35, "hold": 1.0},
         "fast": {"label": "Fast", "tail": 0.15, "hold": 0.5}}
 
+# Emojis that ride along with a caption word: one per line at most, matched on the word as spoken.
+# They are drawn in the caption's own colour (the emoji font's glyphs take it on), so they pop with it.
+EMOJIS = {"car": "🏎️", "drift": "🏎️", "drive": "🚗", "driving": "🚗", "race": "🏁", "racing": "🏁",
+          "win": "🏆", "wins": "🏆", "won": "🏆", "winner": "🏆", "trophy": "🏆",
+          "lose": "😭", "loses": "😭", "lost": "😭", "loser": "😭",
+          "die": "💀", "dies": "💀", "died": "💀", "dying": "💀", "dead": "💀", "death": "💀", "kill": "💀",
+          "gun": "🔫", "shoot": "🔫", "shooting": "🔫", "shot": "🔫",
+          "police": "🚓", "cop": "🚓", "cops": "🚓", "arrest": "🚔", "jail": "🚔", "prison": "🚔",
+          "money": "💰", "cash": "💰", "rich": "💰", "dollars": "💰", "billion": "💰", "million": "💰",
+          "explosion": "💥", "explode": "💥", "explodes": "💥", "bomb": "💥", "boom": "💥", "crash": "💥",
+          "hit": "💥", "punch": "👊", "fight": "🥊", "fighting": "🥊", "war": "⚔️",
+          "crazy": "🤯", "insane": "🤯", "wild": "🤯", "shocking": "😱", "omg": "😱", "scary": "😱",
+          "funny": "😂", "lol": "😂", "laugh": "😂", "joke": "😂", "hilarious": "😂",
+          "love": "❤️", "heart": "❤️", "kiss": "💋", "baby": "👶", "girl": "👧", "boy": "👦",
+          "dog": "🐕", "cat": "🐱", "horse": "🐎", "shark": "🦈", "fish": "🐟", "bird": "🐦",
+          "fire": "🔥", "burning": "🔥", "burn": "🔥", "hot": "🔥",
+          "water": "💦", "ocean": "🌊", "sea": "🌊", "swim": "🏊", "rain": "🌧️", "snow": "❄️",
+          "fast": "⚡", "speed": "⚡", "quick": "⚡", "power": "⚡", "electric": "⚡",
+          "sleep": "😴", "sleeping": "😴", "tired": "😴", "night": "🌙", "sun": "☀️", "star": "⭐",
+          "eat": "🍔", "food": "🍔", "pizza": "🍕", "coffee": "☕", "drink": "🥤",
+          "phone": "📱", "computer": "💻", "game": "🎮", "gaming": "🎮", "gamer": "🎮", "controller": "🎮",
+          "map": "🗺️", "secret": "🤫", "hidden": "🔍", "found": "🔍", "find": "🔍", "look": "👀",
+          "king": "👑", "boss": "😈", "hero": "🦸", "friend": "🤝", "team": "🤝",
+          "run": "🏃", "running": "🏃", "jump": "🤸", "flying": "✈️", "fly": "✈️", "helicopter": "🚁",
+          "boat": "🚤", "ship": "🚢", "train": "🚂", "plane": "✈️", "bike": "🏍️", "house": "🏠",
+          "mission": "🎯", "goal": "🎯", "level": "🎮", "new": "🆕", "first": "🥇", "best": "🥇",
+          "party": "🎉", "dance": "💃", "music": "🎵", "wait": "⏳", "stop": "✋", "idea": "💡",
+          "talk": "💬", "chat": "💬", "say": "💬", "watch": "📺", "stream": "📺", "video": "📺"}
+
+
+def _is_emoji(ch):
+    o = ord(ch)
+    return o == 0xFE0F or o == 0x200D or 0x2600 <= o <= 0x27BF or 0x2B00 <= o <= 0x2BFF or 0x1F000 <= o <= 0x1FAFF
+
 
 class _Font:
     """Measures text exactly as the renderer will draw it, so every word can be placed by hand: the highlighted
@@ -62,9 +97,23 @@ class _Font:
         return size * self.upm / (self.asc + self.desc)
 
     def width(self, text, size):
-        """Pixels wide at this ASS size."""
+        """Pixels wide at this size. Words are measured with the caption font; any emoji in the text is
+        measured with the machine's emoji font, so an emoji gets its fair space between the words."""
         try:
             from PIL import ImageFont
+            if any(_is_emoji(c) for c in text):
+                if "e" not in self._pil:
+                    ej = Path(os.environ.get("WINDIR", r"C:\Windows")) / "Fonts" / "seguiemj.ttf"
+                    self._pil["e"] = ImageFont.truetype(str(ej), 200) if ej.is_file() else None
+                ef = self._pil["e"]
+                if ef is not None:
+                    if "f" not in self._pil:
+                        self._pil["f"] = ImageFont.truetype(self.path, 200)
+                    w = 0
+                    for part in re.split(r"([\u2600-\u27BF\u2B00-\u2BFF\U0001F000-\U0001FAFF][\uFE0F\u200D]*)", text):
+                        if part:
+                            w += ef.getlength(part) if _is_emoji(part[0]) else self._pil["f"].getlength(part)
+                    return w * self.em(size) / 200
             if "f" not in self._pil:
                 self._pil["f"] = ImageFont.truetype(self.path, 200)
             return self._pil["f"].getlength(text) * self.em(size) / 200
@@ -163,7 +212,7 @@ def _hook_events(hook, dur, y):
     return ev
 
 
-def build_ass(words, start, end, hook, style_name, highlight, hook_y, cap_y, pace="normal") -> str:
+def build_ass(words, start, end, hook, style_name, highlight, hook_y, cap_y, pace="normal", emoji=True) -> str:
     st = STYLES.get(style_name, STYLES["bounce"])
     pc = PACE.get(pace, PACE["normal"])
     words = [dict(w, s=w["s"] - CAPTION_LEAD, e=w["e"] - CAPTION_LEAD) for w in words]
@@ -203,6 +252,10 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         for x in g:
             t = re.sub(r"[.,;:]+$", "", x["w"])
             texts.append(t.upper() if st["upper"] else t)
+        if emoji:      # one related emoji per line, riding on the word it matches, popping with it
+            hit = next((i for i, x in enumerate(g) if _key(re.sub(r"[.,;:]+$", "", x["w"])) in EMOJIS), None)
+            if hit is not None and not _is_emoji(texts[hit][-1]):
+                texts[hit] += " " + EMOJIS[_key(re.sub(r"[.,;:]+$", "", g[hit]["w"]))]
         if not all(roman.drawable(t) for t in texts):
             # A script the caption font cannot draw (Japanese, Thai, Chinese...): its words cannot be measured, so
             # they are not placed one by one. The line is drawn whole and centred, in a font the system has for it.
@@ -285,7 +338,7 @@ def render_clip(src: Path, out_dir: Path, name: str, clip: dict, words: list, sr
         layout = "crop"     # no webcam found: the game fills the screen, which is still the right shape
     hook_y = _hook_y(layout, hook_y, face)
     ass = build_ass(words if clip.get("captions", True) else [], start, end, clip.get("hook", ""), clip.get("style", "bounce"),
-                    clip.get("highlight_words", []), hook_y, cap_y, clip.get("pace", "normal"))
+                    clip.get("highlight_words", []), hook_y, cap_y, clip.get("pace", "normal"), clip.get("emoji", True))
     # The clip is made in a short work folder and moved into place afterwards. The caption step of ffmpeg cannot
     # open files whose full path is longer than 260 characters on Windows, which a data folder deep inside other
     # folders easily reaches. Inside the work folder every name is short and relative (a drive colon would also
@@ -335,7 +388,7 @@ def preview_frame(src: Path, clip: dict, words: list, src_w: int, src_h: int, at
     hook_y = _hook_y(layout, hook_y, face)
     ass = _ass_at(build_ass(words if clip.get("captions", True) else [], local["start"], local["end"], local["hook"],
                             local.get("style", "bounce"), local.get("highlight_words", []), hook_y, cap_y,
-                            local.get("pace", "normal")), r)
+                            local.get("pace", "normal"), local.get("emoji", True)), r)
     work = Path(tempfile.mkdtemp(prefix="pk"))
     try:
         (work / "p.ass").write_text(ass, encoding="utf-8")

@@ -950,10 +950,11 @@ _previews: dict = {}       # settings -> one frame: the same look asked twice is
 
 
 @app.get("/api/jobs/{jid}/clips/{cid}/preview")
-def clip_preview(jid: str, cid: str, hook: str = "", captions: bool = True, style: str = "",
-                 pace: str = "", layout: str = "", start: float | None = None, end: float | None = None):
+def clip_preview(jid: str, cid: str, hook: str = "", captions: bool = True, emoji: bool | None = None,
+                 style: str = "", pace: str = "", layout: str = "",
+                 start: float | None = None, end: float | None = None):
     """One frame of the clip as the editor's settings would draw it: a look before committing to a re-make."""
-    _throttle("preview:" + ctx.uid(), 40, 60, "That's a lot of looks in a short time. Wait a moment.")
+    _throttle("preview:" + ctx.uid(), 120, 60, "That's a lot of looks in a short time. Wait a moment.")
     job = _job_or_404(jid)
     orig = next((c for c in job["clips"] if c["id"] == cid), None)
     if not orig:
@@ -964,6 +965,7 @@ def clip_preview(jid: str, cid: str, hook: str = "", captions: bool = True, styl
     clip = dict(orig)
     clip["hook"] = str(hook)[:60] if hook else orig.get("hook", "")
     clip["captions"] = bool(captions)
+    clip["emoji"] = bool(emoji) if emoji is not None else orig.get("emoji", True)
     clip["style"] = style if style in render.STYLES else orig.get("style", "bounce")
     clip["pace"] = pace if pace in render.PACE else orig.get("pace", "normal")
     clip["layout"] = layout if layout in render.LAYOUTS else orig.get("layout", "blur")
@@ -984,7 +986,7 @@ def clip_preview(jid: str, cid: str, hook: str = "", captions: bool = True, styl
             words = jobs.preview_words(job, clip, json.loads(wf.read_text(encoding="utf-8")))
         except Exception:  # noqa: BLE001 - a look without captions is still a look
             words = []
-    sig = (jid, cid, round(s, 2), round(e, 2), clip["hook"], clip["captions"], clip["style"],
+    sig = (jid, cid, round(s, 2), round(e, 2), clip["hook"], clip["captions"], clip["emoji"], clip["style"],
            clip["pace"], clip["layout"])
     jpg = _previews.get(sig)
     if jpg is None:

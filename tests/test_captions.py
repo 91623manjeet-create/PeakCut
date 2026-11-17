@@ -127,6 +127,19 @@ def main(data):
             check("a clip that starts deep in the video still shows its captions",
                   mid is not None and abs(mid - 1.85) < 0.05)   # said until 1.5 on screen, off 0.35 later
 
+            # --- emojis: one per line, riding on a word that means something
+            talk = [{"w": "nice", "s": 0.5, "e": 0.9}, {"w": "car", "s": 1.0, "e": 1.4},
+                    {"w": "money", "s": 2.2, "e": 2.6}, {"w": "fast", "s": 2.8, "e": 3.2}]
+            with_e = render.build_ass(talk, 0.0, 8.0, "", "clean", [], 300, 1500, "normal", emoji=True)
+            without_e = render.build_ass(talk, 0.0, 8.0, "", "clean", [], 300, 1500, "normal", emoji=False)
+            cap_lines = lambda a: [l for l in a.splitlines() if l.startswith("Dialogue") and ",Cap," in l]
+            check("a caption word gets a related emoji",
+                  any("car 🏎️" in l for l in cap_lines(with_e)) and any("money 💰" in l for l in cap_lines(with_e)))
+            check("at most one emoji per line", not any(l.count("🏎️") + l.count("💰") + l.count("⚡") > 1 for l in cap_lines(with_e)))
+            check("emojis can be turned off", not any("🏎️" in l or "💰" in l for l in cap_lines(without_e)))
+            check("an emoji gets a real width, not a gap",
+                  render._Font.get("Poppins ExtraBold").width("car 🏎️", 100) > render._Font.get("Poppins ExtraBold").width("car", 100) * 1.1)
+
             check("the default caption speed is normal", jobs.create(source, {}, enqueue=False)["options"]["pace"] == "normal")
             check("a video can pick a caption speed", jobs.create(source, {"pace": "slow"}, enqueue=False)["options"]["pace"] == "slow")
             response = server.rerender(job["id"], clip["id"], {"pace": "fast"})

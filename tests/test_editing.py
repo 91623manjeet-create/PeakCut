@@ -8,6 +8,8 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
+from fastapi import HTTPException
+
 sys.path.insert(0, ".")
 WORDS = [{"w": "hello", "s": 0.4, "e": 0.8}, {"w": "world", "s": 0.9, "e": 1.4}, {"w": "again", "s": 1.6, "e": 2.0}]
 CLIP = {"id": "clip1", "start": 0.0, "end": 3.0, "status": "done", "hook": "WATCH THIS", "version": 1,
@@ -52,6 +54,18 @@ def main(data):
                 check("a change on the video itself still queues a re-make",
                       queue.call_args.args[0] == ("clip", job["id"], cid) and out["clips"][0]["pace"] == "fast")
 
+                real = next(c for c in jobs._jobs[job["id"]]["clips"] if c["id"] == cid)
+                real["status"] = "done"
+                for bad in ("yes", 1, "true"):
+                    try:
+                        server.rerender(job["id"], cid, {"emoji": bad})
+                        check(f"the editor rejects {bad!r} as an emoji preference", False)
+                    except HTTPException as e:
+                        check(f"the editor rejects {bad!r} as an emoji preference", e.status_code == 400)
+                out = server.rerender(job["id"], cid, {"emoji": False})
+                check("the editor can turn emojis off", out["clips"][0]["emoji"] is False)
+                real["status"] = "done"
+
             with patch.object(brain, "english_captions", side_effect=AssertionError("a look must not ask the AI")):
                 look = server.clip_preview(job["id"], cid)
                 check("a look comes back as a picture", bytes(look.body)[:3] == b"\xff\xd8\xff")
@@ -61,6 +75,8 @@ def main(data):
 
                 off = server.clip_preview(job["id"], cid, captions=False)
                 check("a look with captions off is a different picture", off.body != look.body)
+                no_e = server.clip_preview(job["id"], cid, emoji=False)
+                check("a look can turn the emojis off too", bytes(no_e.body)[:3] == b"\xff\xd8\xff")
                 gm = server.clip_preview(job["id"], cid, layout="gameplay")
                 check("the gameplay layout falls back to a full screen when no webcam is known", bytes(gm.body)[:3] == b"\xff\xd8\xff")
                 far = server.clip_preview(job["id"], cid, start=1.0, end=3.5)
