@@ -122,6 +122,10 @@ def main(data):
             brief = [{"w": "hi", "s": 0.0, "e": 0.2}]
             flash = last_end(render.build_ass(brief, 0.0, 6.0, "", "clean", [], 300, 1500, "normal"), "hi")
             check("a very short line still shows long enough to read", abs(flash - 1.0) < 0.05)
+            late = [{"w": "deep", "s": 273.5, "e": 274.0}, {"w": "in", "s": 274.2, "e": 274.5}]
+            mid = last_end(render.build_ass(late, 273.0, 279.0, "", "clean", [], 300, 1500, "normal"), "in")
+            check("a clip that starts deep in the video still shows its captions",
+                  mid is not None and abs(mid - 1.85) < 0.05)   # said until 1.5 on screen, off 0.35 later
 
             check("the default caption speed is normal", jobs.create(source, {}, enqueue=False)["options"]["pace"] == "normal")
             check("a video can pick a caption speed", jobs.create(source, {"pace": "slow"}, enqueue=False)["options"]["pace"] == "slow")

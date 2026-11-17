@@ -349,6 +349,15 @@ def delete(jid):
 def request_render(jid, cid, changes: dict):
     job = _jobs[jid]
     clip = next(c for c in job["clips"] if c["id"] == cid)
+    # Only the post's words: the video itself says the same thing either way, so it is not re-made.
+    text = {k: str(changes[k])[:{"title": 100, "description": 2000}[k]]
+            for k in ("title", "description") if k in changes}
+    if text and len(text) == len(changes):
+        clip.update(text)
+        _refresh_post_text(job, clip)
+        save(job)
+        ctx.bump(job["user"])
+        return
     new = dict(clip)
     if "captions" in changes:
         new.update(clean_options({"captions": changes["captions"]}))
@@ -406,6 +415,32 @@ def render_one(job, clip, words):
         clip.update(status="error", error=safe.friendly(e, 400))
         creators.log(job["creator"], f"Clip failed: {safe.friendly(e, 200)}")
     save(job)
+
+
+def _refresh_post_text(job, clip):
+    """Keeps the little side file next to the clip (its post text on disk) in step when the words are
+    edited without a re-make."""
+    f = Path(job["dir"]) / "clips" / f"{clip['id']}.json"
+    if not f.is_file():
+        return
+    try:
+        post = json.loads(f.read_text(encoding="utf-8"))
+        post.update({k: clip[k] for k in ("title", "description") if k in clip})
+        f.write_text(json.dumps(post, indent=1), encoding="utf-8")
+    except Exception:  # noqa: BLE001 - the job's own copy is the truth; a stale side file is not fatal
+        pass
+
+
+def preview_words(job, clip, words):
+    """Caption words for a quick look: words already tidied for this exact span when they are cached,
+    otherwise the words as heard. Never asks the AI, so a preview is instant."""
+    span = [round(clip["start"], 2), round(clip["end"], 2), "en2"]      # "en2": captions made always-English
+    if clip.get("fixed_for") == span and clip.get("fixed_words"):
+        raw = clip["fixed_words"]
+    else:
+        raw = [w for w in words if clip["start"] - 1 <= w["s"] <= clip["end"] + 1]
+    off = clip.get("src_offset", 0.0)
+    return [dict(w, s=w["s"] - off, e=w["e"] - off) for w in roman.words(raw)]
 
 
 def _caption_words(job, clip, words, off):

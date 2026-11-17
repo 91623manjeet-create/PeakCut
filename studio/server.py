@@ -934,14 +934,65 @@ def rerender(jid: str, cid: str, body: dict = Body(...)):
     clip = next((c for c in job["clips"] if c["id"] == cid), None)
     if not clip:
         raise HTTPException(404, "No such clip")
-    if job["status"] in ("queued", "running") or clip.get("status") in ("queued", "rendering"):
+    text_only = set(body) <= {"title", "description"}
+    if not text_only and (job["status"] in ("queued", "running") or clip.get("status") in ("queued", "rendering")):
         raise HTTPException(409, "This clip is still being made. Try again when it has finished.")
-    _throttle("render:" + ctx.uid(), 20, 600, "That's a lot of re-makes in a short time. Wait a few minutes.")
+    if not text_only:      # only the post's words: no video is made, so no throttle either
+        _throttle("render:" + ctx.uid(), 20, 600, "That's a lot of re-makes in a short time. Wait a few minutes.")
     try:
         jobs.request_render(jid, cid, body)
     except (ValueError, TypeError) as e:
         raise HTTPException(400, str(e))
     return jobs.public(job)
+
+
+_previews: dict = {}       # settings -> one frame: the same look asked twice is not rendered twice
+
+
+@app.get("/api/jobs/{jid}/clips/{cid}/preview")
+def clip_preview(jid: str, cid: str, hook: str = "", captions: bool = True, style: str = "",
+                 pace: str = "", layout: str = "", start: float | None = None, end: float | None = None):
+    """One frame of the clip as the editor's settings would draw it: a look before committing to a re-make."""
+    _throttle("preview:" + ctx.uid(), 40, 60, "That's a lot of looks in a short time. Wait a moment.")
+    job = _job_or_404(jid)
+    orig = next((c for c in job["clips"] if c["id"] == cid), None)
+    if not orig:
+        raise HTTPException(404, "No such clip")
+    src = Path(orig.get("src") or job.get("source_path") or "")
+    if not src.is_file():
+        raise HTTPException(409, "The video this clip was cut from isn't on disk any more.")
+    clip = dict(orig)
+    clip["hook"] = str(hook)[:60] if hook else orig.get("hook", "")
+    clip["captions"] = bool(captions)
+    clip["style"] = style if style in render.STYLES else orig.get("style", "bounce")
+    clip["pace"] = pace if pace in render.PACE else orig.get("pace", "normal")
+    clip["layout"] = layout if layout in render.LAYOUTS else orig.get("layout", "blur")
+    s, e = clip["start"], clip["end"]
+    lo = orig.get("src_offset", 0.0)
+    hi = orig.get("src_end") or (job.get("duration") or clip["end"])
+    if start is not None:
+        s = float(start)
+    if end is not None:
+        e = float(end)
+    s = max(lo, min(s, hi - 3))     # a clip is at least 3 seconds, inside the piece of video kept
+    e = min(max(e, s + 3), hi)
+    clip.update(start=round(s, 2), end=round(e, 2))
+    words = []
+    wf = Path(job["dir"]) / "words.json"
+    if clip["captions"] and wf.is_file():
+        try:
+            words = jobs.preview_words(job, clip, json.loads(wf.read_text(encoding="utf-8")))
+        except Exception:  # noqa: BLE001 - a look without captions is still a look
+            words = []
+    sig = (jid, cid, round(s, 2), round(e, 2), clip["hook"], clip["captions"], clip["style"],
+           clip["pace"], clip["layout"])
+    jpg = _previews.get(sig)
+    if jpg is None:
+        jpg = render.preview_frame(src, clip, words, job["width"], job["height"])
+        _previews[sig] = jpg
+        while len(_previews) > 40:
+            _previews.pop(next(iter(_previews)))
+    return Response(content=jpg, media_type="image/jpeg")
 
 
 @app.delete("/api/jobs/{jid}")

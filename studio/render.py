@@ -193,10 +193,10 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     groups = _groups(inside, st["per"])
     for gi, g in enumerate(groups):
         g_start = max(0.0, g[0]["s"] - start)
-        nxt = (groups[gi + 1][0]["s"] if gi + 1 < len(groups) else dur) - start
         # the line leaves with the voice: a moment after its last word, held long enough to read,
         # never reaching into the next line and never past the end of the clip
-        g_end = min(max(g[-1]["e"] + pc["tail"], g_start + pc["hold"]), nxt) - start
+        g_end = min(max(g[-1]["e"] + pc["tail"], g[0]["s"] + pc["hold"]),
+                    groups[gi + 1][0]["s"] if gi + 1 < len(groups) else end) - start
         if g_end - g_start < 0.02:
             continue
         texts = []
@@ -293,6 +293,59 @@ def render_clip(src: Path, out_dir: Path, name: str, clip: dict, words: list, sr
     work = Path(tempfile.mkdtemp(prefix="pk"))
     try:
         return _render_in(work, src, out_dir, name, start, end, layout, fg_h, ass, face=face)
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
+def _ass_at(ass: str, r: float) -> str:
+    """Shifts every subtitle event back so the moment r seconds into the clip is now. A single frame
+    of the clip (for a quick look while editing) then shows exactly what a viewer would see then."""
+    def p(ts):
+        h, m, s = ts.split(":")
+        return int(h) * 3600 + int(m) * 60 + float(s)
+    out = []
+    for line in ass.splitlines():
+        m = re.match(r"(Dialogue: \d+,)([^,]+),([^,]+)(,.*)", line)
+        if m:
+            a, b = p(m[2]) - r, p(m[3]) - r
+            if b <= 0.02:
+                continue
+            line = f"{m[1]}{_ts(max(0.0, a))},{_ts(b)}{m[4]}"
+        out.append(line)
+    return "\n".join(out) + "\n"
+
+
+def preview_frame(src: Path, clip: dict, words: list, src_w: int, src_h: int, at: float = None) -> bytes:
+    """One frame of how the clip would look with these settings: a quick look while editing, not a render."""
+    start, end = clip["start"], clip["end"]
+    off = clip.get("src_offset", 0.0)
+    local = dict(clip, start=start - off, end=end - off, hook=roman.to_roman(clip.get("hook") or ""))
+    dur = max(0.1, end - start)
+    if at is not None and start <= at < end:
+        r = at - start
+    else:
+        # the moment that shows the most: a word being spoken a little way in, else the middle
+        ws = [w for w in words if local["start"] <= w["s"] < local["end"]]
+        pick = min(ws, key=lambda w: abs((w["s"] + w["e"]) / 2 - (local["start"] + dur * 0.4)), default=None)
+        r = (pick["s"] + pick["e"]) / 2 - local["start"] if pick else dur / 2
+    layout, fg_h, hook_y, cap_y = geometry(src_w, src_h, local.get("layout", "blur"))
+    face = clip.get("facecam")
+    if layout == "gameplay" and not (face and len(face) == 4):
+        layout = "crop"     # same fallback the real render uses
+    hook_y = _hook_y(layout, hook_y, face)
+    ass = _ass_at(build_ass(words if clip.get("captions", True) else [], local["start"], local["end"], local["hook"],
+                            local.get("style", "bounce"), local.get("highlight_words", []), hook_y, cap_y,
+                            local.get("pace", "normal")), r)
+    work = Path(tempfile.mkdtemp(prefix="pk"))
+    try:
+        (work / "p.ass").write_text(ass, encoding="utf-8")
+        (work / "f").mkdir()
+        for f in config.FONTS_DIR.glob("*.ttf"):
+            shutil.copyfile(f, work / "f" / f.name)
+        fc = _filter(layout, fg_h, face if layout == "gameplay" else None) + "[v0]ass=p.ass:fontsdir=f[v]"
+        run(["ffmpeg", "-y", "-v", "error", "-ss", f"{local['start'] + r:.2f}", "-i", str(src), "-map", "[v]",
+             "-filter_complex", fc, "-frames:v", "1", "-q:v", "3", "p.jpg"], cwd=work)
+        return (work / "p.jpg").read_bytes()
     finally:
         shutil.rmtree(work, ignore_errors=True)
 

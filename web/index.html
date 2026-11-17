@@ -2134,7 +2134,7 @@ async function drawSettings() {
 async function saveSettings() { const d = {}; $$("#sform [data-s]").forEach(i => d[i.dataset.s] = i.value); await send("/api/settings", d, "PUT"); }
 
 /* ============================================================ clip editor */
-function openClip(jid, cid) { D.jid = jid; D.cid = cid; D.sig = ""; drawClipDlg(true); $("#clipdlg").showModal(); }
+function openClip(jid, cid) { D.jid = jid; D.cid = cid; D.sig = ""; D.stageMode = null; drawClipDlg(true); $("#clipdlg").showModal(); }
 function drawClipDlg(full) {
   const j = jobOf(D.jid), c = j?.clips.find(x => x.id === D.cid), dlg = $("#clipdlg");
   if (!c) { if (dlg.open) dlg.close(); return; }
@@ -2168,9 +2168,44 @@ function drawClipDlg(full) {
           ${c.status === "done" ? `<a class="btn" href="${m}${esc(c.file)}?download=1">${ic("down")}Download</a>` : ""}
           <button class="btn" data-act="copy" data-j="${j.id}" data-c="${esc(c.id)}">${ic("copy")}Copy post text</button></div>
       </div></div>`;
-  } else if (D.sig !== sig) $("#stage").innerHTML = stage;
+    D.stageMode = "video";
+  } else if (D.sig !== sig) { $("#stage").innerHTML = stage; D.stageMode = "video"; }
   D.sig = sig;
   put($("#dposts"), postPills(c));
+}
+const VISUAL_F = ["hook", "captions", "style", "pace", "layout", "start", "end"];
+function editorVals() {
+  const v = {};
+  $$("#clipdlg [data-f]").forEach(i => { v[i.dataset.f] = i.type === "checkbox" ? i.checked : i.type === "number" ? Number(i.value) : i.value; });
+  return v;
+}
+function editorChanged() {
+  const c = jobOf(D.jid)?.clips.find(x => x.id === D.cid);
+  if (!c) return null;
+  const v = editorVals();
+  const same = (a, b) => String(a ?? "") === String(b ?? "");
+  return {v, c,
+    visual: VISUAL_F.some(k => same(v[k], c[k] ?? (k === "captions" ? true : k === "pace" ? "normal" : "")) === false),
+    text: !same(v.title, c.title) || !same(v.description, c.description)};
+}
+let previewTimer = 0;
+function syncEditorSoon() { clearTimeout(previewTimer); previewTimer = setTimeout(syncEditor, 500); }
+function syncEditor() {
+  const st = editorChanged(); if (!st || !$("#stage")) return;
+  const btn = $("#clipdlg [data-act=remake]");
+  if (btn) btn.innerHTML = st.text && !st.visual ? `${ic("check")}Save text` : `${ic("scissors")}Save and re-make clip`;
+  const want = st.visual && st.c.status === "done" ? "preview" : "video";
+  if (want === D.stageMode) return;
+  D.stageMode = want;
+  const j = jobOf(D.jid), m = `/media/${j.id}/`;
+  if (want === "preview") {
+    const q = new URLSearchParams({hook: st.v.hook || "", captions: st.v.captions, style: st.v.style,
+                                   pace: st.v.pace || "normal", layout: st.v.layout, start: st.v.start, end: st.v.end});
+    $("#stage").innerHTML = `<img src="/api/jobs/${j.id}/clips/${st.c.id}/preview?${q}&_=${Date.now()}" alt="Preview of the clip with these settings">
+      <p class="sub" style="position:absolute;left:8px;right:8px;bottom:8px;text-align:center">A look at the end — "Save and re-make clip" writes it into the video</p>`;
+  } else if (st.c.status === "done") {
+    $("#stage").innerHTML = `<video src="${m}${esc(st.c.file)}?v=${st.c.version}" poster="${m}${esc(st.c.cover)}?v=${st.c.version}" controls autoplay playsinline></video>`;
+  }
 }
 $("#clipdlg").addEventListener("close", () => { $("#clipdlg").innerHTML = ""; D.jid = null; });
 $("#clipdlg").addEventListener("click", e => { if (e.target === e.currentTarget) e.currentTarget.close(); });
@@ -2231,8 +2266,10 @@ document.addEventListener("drop", e => { const a = $(".composer"); if (a) { e.pr
 function syncCaptionStyle(toggle) {
   toggle.closest("#addform, #cform, #clipdlg").querySelectorAll("[data-caption-style]").forEach(i => i.disabled = !toggle.checked);
 }
+document.addEventListener("input", e => { if (e.target.closest?.("#clipdlg") && e.target.dataset.f) syncEditorSoon(); });
 document.addEventListener("change", async e => {
   const t = e.target;
+  if (t.closest?.("#clipdlg") && t.dataset.f) syncEditorSoon();
   if (t.id === "o_creator") {
     const toggle = $("#o_captions"), c = S.creators.find(c => c.id === t.value);
     if (!toggle.dataset.overridden) { toggle.checked = c?.captions !== false; syncCaptionStyle(toggle); }
@@ -2469,7 +2506,11 @@ document.addEventListener("click", async e => {
       const body = {}; $$("#clipdlg [data-f]").forEach(i => {
         body[i.dataset.f] = i.type === "checkbox" ? i.checked : i.type === "number" ? Number(i.value) : i.value;
       });
-      await send(`/api/jobs/${D.jid}/clips/${D.cid}/render`, body); toast("Re-making the clip…", "ok"); return tick();
+      const textOnly = editorChanged()?.text && !editorChanged().visual;
+      await send(`/api/jobs/${D.jid}/clips/${D.cid}/render`, body);
+      toast(textOnly ? "Saved" : "Re-making the clip…", "ok");
+      D.stageMode = null;
+      return tick();
     }
     if (a === "postnow" || a === "postqueue") {
       const accs = $$("#clipdlg [data-pacc]:checked").map(i => i.value);
