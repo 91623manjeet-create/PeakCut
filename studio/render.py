@@ -443,7 +443,9 @@ def preview_frame(src: Path, clip: dict, words: list, src_w: int, src_h: int, at
             from PIL import Image
             im = Image.open(work / "p.jpg").convert("RGBA")
             for o in active:
-                img = _emoji_img(o["emoji"], int(o["w"]))
+                t = r - o["s"]          # the same pop the video makes: small, overshoot, settled
+                k = 0.7 if t < 0.09 else (1.32 if t < 0.20 else 1.0)
+                img = _emoji_img(o["emoji"], max(1, int(o["w"] * k)))
                 if img is not None:
                     im.alpha_composite(img, (int(o["cx"] - img.width / 2), int(o["cy"] - img.height / 2)))
             im.convert("RGB").save(work / "p.jpg", quality=90)
@@ -459,20 +461,30 @@ def _render_in(work: Path, src: Path, out_dir: Path, name: str, start, end, layo
     for f in config.FONTS_DIR.glob("*.ttf"):
         shutil.copyfile(f, work / "f" / f.name)
     cmd = ["ffmpeg", "-y", "-v", "error", "-ss", f"{start:.2f}", "-t", f"{end - start:.2f}", "-i", str(src)]
-    painted = []      # (input number, where and when the emoji shows, its picture) — true-colour emojis over the words
-    for i, o in enumerate(overlays):
-        img = _emoji_img(o["emoji"], int(o["w"]))
-        if img is None:
-            continue
-        img.save(work / f"e{i}.png")
-        cmd += ["-i", f"e{i}.png"]     # one frame, held for the whole clip: enable shows it only while its word is said
-        painted.append((i, o, img))
+    # Each emoji is painted at three sizes and the render holds them in turn: small, then too big, then settled —
+    # the same pop the words make, so the picture springs in with the word it matches.
+    painted = []      # (input number, window to show the picture for, where, its picture)
+    i = 0
+    for o in overlays:
+        sizes = [("s", 0.7, o["s"], o["s"] + 0.09),          # springing up
+                 ("b", 1.32, o["s"] + 0.08, o["s"] + 0.20),  # overshoot
+                 ("f", 1.0, o["s"] + 0.19, o["e"])]          # settled, until the line goes
+        for tag, k, a, b in sizes:
+            if b <= a:
+                continue
+            img = _emoji_img(o["emoji"], max(1, int(o["w"] * k)))
+            if img is None:
+                break
+            img.save(work / f"e{i}.png")
+            cmd += ["-i", f"e{i}.png"]     # one frame each, held for the whole clip; enable shows it in its window
+            painted.append((i, o, img, a, b))
+            i += 1
     fc = _filter(layout, fg_h, face) + f"[v0]ass={name}.ass:fontsdir=f" + ("[va]" if painted else "[v]")
     prev = "va"
-    for k, (i, o, img) in enumerate(painted):
+    for k, (i, o, img, a, b) in enumerate(painted):
         x, y = o["cx"] - img.width / 2, o["cy"] - img.height / 2
         out = "v" if k == len(painted) - 1 else f"vb{i}"
-        fc += f";[{prev}][{i + 1}:v]overlay={x:.0f}:{y:.0f}:enable='between(t,{o['s']:.2f},{o['e']:.2f})'[{out}]"
+        fc += f";[{prev}][{i + 1}:v]overlay={x:.0f}:{y:.0f}:enable='between(t,{a:.2f},{b:.2f})'[{out}]"
         prev = out
     base = cmd + ["-filter_complex", fc, "-map", "[v]", "-map", "0:a:0", "-af", "loudnorm=I=-14:TP=-1.5:LRA=11",
                   "-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-movflags", "+faststart", "-pix_fmt"]
