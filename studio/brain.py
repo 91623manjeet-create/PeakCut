@@ -129,12 +129,16 @@ def _tidy(c, s, e, game=None):
         if t and t.lower() not in {x.lower() for x in tags}:
             tags.append(t)
     words = c.get("highlight_words") if isinstance(c.get("highlight_words"), list) else []
+    tags = [t for t in tags if t][:8]
+    desc = roman.to_roman(_text(c.get("description"), 240))
+    if tags:    # the related words ride in the description itself: they are seen and edited where the post is written
+        desc = (desc + "\n\n" + " ".join("#" + t for t in tags))[:400]
     return {
         "start": s, "end": e, "score": max(0, min(100, int(_num(c.get("score"))))),
         "category": cat if cat in CATEGORIES else "other",
         "hook": roman.to_roman(_text(c.get("hook"), 60)).upper(), "title": roman.to_roman(_text(c.get("title"), 100)),
-        "description": roman.to_roman(_text(c.get("description"), 300)),
-        "hashtags": [t for t in tags if t][:8],
+        "description": desc,
+        "hashtags": tags,
         "highlight_words": [roman.to_roman(_text(h, 30)) for h in words][:8],
         "reason": _text(c.get("reason"), 200),
     }

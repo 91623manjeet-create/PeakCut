@@ -101,8 +101,11 @@ def on_clip_ready(job, clip):
 
 
 def _caption(clip, creator):
-    tags = " ".join("#" + h for h in clip.get("hashtags", []))
-    return "\n\n".join(x for x in (clip.get("description", ""), tags, creator.get("post_footer", "")) if x)
+    desc = clip.get("description", "")
+    tags = clip.get("hashtags", [])
+    if tags and "#" not in desc:    # clips made before the tags lived in the description carry them here, on the way out
+        desc = "\n\n".join(x for x in (desc, " ".join("#" + h for h in tags)) if x)
+    return "\n\n".join(x for x in (desc, creator.get("post_footer", "")) if x)
 
 
 def _post(p):

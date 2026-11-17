@@ -48,6 +48,18 @@ plain = brain._tidy({"start": 1, "end": 9, "score": 80, "category": "clutch", "h
                      "description": "d", "hashtags": ["Gaming"], "highlight_words": []}, 1, 9)
 check("a stream with no game gets no game tags", "GTA6" in plain["hashtags"], False)
 
+# ---- the related tags are written in the description itself, where the post is written
+from studio import posting
+check("the tags are written in the description", tidy["description"],
+      "three of them\n\n#Gaming #FPS #GTA6 #GTA6Game #ViceCity #RockstarGames #GTA6Launch")
+long = brain._tidy({"start": 1, "end": 9, "score": 80, "hook": "x", "title": "t",
+                    "description": "word " * 90, "hashtags": ["GTA6"], "highlight_words": []}, 1, 9, game="gta 6")
+check("a long description is trimmed but the tags still ride", long["description"].endswith("#GTA6 #GTA6Game #ViceCity #RockstarGames #GTA6Launch"), True)
+check("a clip with no tags has a plain description", brain._tidy({"description": "just words", "hashtags": []}, 0, 1)["description"], "just words")
+check("a post does not carry its tags twice", posting._caption({"description": tidy["description"], "hashtags": tidy["hashtags"]}, {}).count("#ViceCity"), 1)
+check("an older clip still gets its tags on the post",
+      posting._caption({"description": "old words", "hashtags": ["Gaming"]}, {}), "old words\n\n#Gaming")
+
 # ---- the AI is told which game it is looking at
 rules = brain._game_rules("gta 6")
 check("the game is named in the extra rules", "Grand Theft Auto VI" in rules, True)
