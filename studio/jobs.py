@@ -108,7 +108,7 @@ _lock = threading.RLock()
 on_clip_ready: list = []   # callbacks (job, clip), run once when a clip first finishes
 
 DEFAULTS = {"max_clips": 6, "min_len": 15, "max_len": 60, "style": "bounce", "layout": "blur", "quality": 720,
-            "range_start": None, "range_end": None, "captions": True}
+            "range_start": None, "range_end": None, "captions": True, "pace": "normal"}
 
 
 LIMITS = {"max_clips": (1, 20), "min_len": (5, 120), "max_len": (10, 180), "quality": (360, 1080)}
@@ -130,6 +130,8 @@ def clean_options(options) -> dict:
             v = max(lo, min(hi, int(float(v))))
         elif k == "style":
             v = v if v in render.STYLES else DEFAULTS["style"]
+        elif k == "pace":
+            v = v if v in render.PACE else DEFAULTS["pace"]
         elif k == "layout":
             v = v if v in render.LAYOUTS else DEFAULTS["layout"]
         else:                                    # range_start, range_end: seconds into the video
@@ -207,6 +209,7 @@ def _load_file(f: Path, uid: str):
     job.setdefault("kind", "video")
     job.setdefault("creator", None)
     job.setdefault("options", {}).setdefault("captions", True)
+    job["options"].setdefault("pace", DEFAULTS["pace"])
     if job.get("source_path"):
         job["source_path"] = _remap(job["source_path"], f.parent)
     if job.get("source", {}).get("path"):
@@ -219,6 +222,7 @@ def _load_file(f: Path, uid: str):
     buffered = job.get("kind") == "live" and any((f.parent / "buffer").glob("*.ts"))
     for c in job.get("clips", []):
         c.setdefault("captions", job["options"]["captions"])
+        c.setdefault("pace", job["options"].get("pace", DEFAULTS["pace"]))
         if c.get("src"):
             c["src"] = _remap(c["src"], f.parent / "clips")
         if c.get("status") in ("rendering", "queued"):
@@ -288,7 +292,7 @@ def create(source: dict, options: dict, enqueue=True, creator=None, kind="video"
     c = creators.get(creator) if creator else None
     if c:
         d = creators.root(c["id"]) / ("live" if kind == "live" else "videos") / jid
-        base = {**DEFAULTS, **{k: c[k] for k in ("max_clips", "min_len", "max_len", "style", "layout", "captions")}}
+        base = {**DEFAULTS, **{k: c[k] for k in ("max_clips", "min_len", "max_len", "style", "layout", "captions", "pace")}}
     else:
         d, base, creator = config.user_dir(ctx.uid()) / "jobs" / jid, dict(DEFAULTS), None
     opts = {**base, **clean_options(options)}
@@ -358,13 +362,15 @@ def request_render(jid, cid, changes: dict):
         raise ValueError("Those times aren't valid.")
     if not 3 <= new["end"] - new["start"] <= 180:
         raise ValueError("A clip can be 3 to 180 seconds long.")
-    for k in ("hook", "title", "description", "style", "layout"):
+    for k in ("hook", "title", "description", "style", "layout", "pace"):
         if k in changes:
             new[k] = str(changes[k])[:{"hook": 60, "title": 100, "description": 2000}.get(k, 20)]
     if new.get("style") not in render.STYLES:
         new["style"] = DEFAULTS["style"]
     if new.get("layout") not in render.LAYOUTS:
         new["layout"] = DEFAULTS["layout"]
+    if new.get("pace") not in render.PACE:
+        new["pace"] = DEFAULTS["pace"]
     clip.update(new, status="queued")
     save(job)
     _q.put(("clip", jid, cid))
@@ -756,7 +762,8 @@ def _run_job(job):
         for c in found:
             c.update(id=f"clip{len(job['clips']) + 1:02d}", start=round(c["start"] + shift, 2),
                      end=round(c["end"] + shift, 2), style=o["style"], layout=o["layout"],
-                     captions=o.get("captions", True), status="queued", version=0)
+                     captions=o.get("captions", True), pace=o.get("pace", DEFAULTS["pace"]),
+                     status="queued", version=0)
             # Only the gameplay layout uses a webcam, so it is only looked for then, and only once: a
             # stream with no webcam is not looked for again on every clip of it.
             if o["layout"] == "gameplay" and face is False:

@@ -32,6 +32,19 @@ def rejects_caption_value(call):
     return False
 
 
+def t_of(stamp):
+    """A subtitle timestamp like 0:00:02.30 as seconds."""
+    h, m, s = stamp.split(":")
+    return int(h) * 3600 + int(m) * 60 + float(s)
+
+
+def last_end(ass, text):
+    """When the caption word `text` is last on screen (seconds from the start of the clip)."""
+    e = [t_of(l.split(",")[2]) for l in ass.splitlines()
+         if l.startswith("Dialogue: ") and ",Cap," in l and l.rstrip().endswith("}" + text)]
+    return max(e) if e else None
+
+
 def main(data):
     os.environ.update(PEAKCUT_DATA=data, DATABASE_URL="", PEAKCUT_ACCOUNTS="0")
     from studio import auth, brain, creators, ctx, db, jobs, render, roman, server
@@ -95,6 +108,32 @@ def main(data):
             check("turning captions back on uses the cached words",
                   clip["status"] == "done" and has_dialogue(encode.call_args.args[-1], "Cap", "POLISHED")
                   and not prepare.called)
+
+            # --- caption speed: a line leaves the screen with the voice, not when the next one starts
+            spoken = [{"w": "hello", "s": 0.5, "e": 0.9}, {"w": "world", "s": 1.0, "e": 1.5},
+                      {"w": "again", "s": 2.3, "e": 2.7}]       # a gap between the two lines, then silence to 6.0
+            when = lambda pace, text: last_end(render.build_ass(spoken, 0.0, 6.0, "", "clean", [], 300, 1500, pace), text)
+            check("at normal speed a line goes off soon after its last word",
+                  abs(when("normal", "world") - 1.85) < 0.05 and abs(when("normal", "again") - 3.3) < 0.05)
+            check("slow speed keeps a line up longer, but never into the next line",
+                  when("slow", "world") > when("normal", "world") + 0.3 and when("slow", "world") <= 2.31)
+            check("fast speed takes a line off almost at once", abs(when("fast", "world") - 1.65) < 0.05)
+            check("no speed stretches the last line to the end of the clip", when("normal", "again") < 5.0)
+            brief = [{"w": "hi", "s": 0.0, "e": 0.2}]
+            flash = last_end(render.build_ass(brief, 0.0, 6.0, "", "clean", [], 300, 1500, "normal"), "hi")
+            check("a very short line still shows long enough to read", abs(flash - 1.0) < 0.05)
+
+            check("the default caption speed is normal", jobs.create(source, {}, enqueue=False)["options"]["pace"] == "normal")
+            check("a video can pick a caption speed", jobs.create(source, {"pace": "slow"}, enqueue=False)["options"]["pace"] == "slow")
+            response = server.rerender(job["id"], clip["id"], {"pace": "fast"})
+            check("the clip editor can change the caption speed", response["clips"][0]["pace"] == "fast")
+            clip["status"] = "done"
+            check("a nonsense caption speed falls back to normal",
+                  server.rerender(job["id"], clip["id"], {"pace": "silly"})["clips"][0]["pace"] == "normal")
+            clip["status"] = "done"
+            jobs.render_one(job, clip, WORDS)
+            check("a clip renders at its chosen speed",
+                  clip["status"] == "done" and has_dialogue(encode.call_args.args[-1], "Cap", "POLISHED"))
 
             render.render_clip(Path(data) / "source.mp4", Path(data) / "clips", "direct",
                                dict(clip, captions=False), WORDS, 1920, 1080)

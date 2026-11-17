@@ -14,7 +14,8 @@ def _root() -> Path:
 
 _lock = threading.RLock()
 
-DEFAULTS = {"name": "", "channel": "", "style": "bounce", "layout": "blur", "captions": True, "min_len": 15, "max_len": 60,
+DEFAULTS = {"name": "", "channel": "", "style": "bounce", "layout": "blur", "captions": True, "pace": "normal",
+            "min_len": 15, "max_len": 60,
             "max_clips": 6, "min_score": 80, "auto_watch": False, "buffer_min": 20, "live_per_hour": 4, "ai_every_min": 3, "ai_only_on_spike": True, "auto_jump_pct": 60,
             "plan": "free", "decide_mode": "both", "must_clip_min": 0, "min_gap_min": 2,
             "game": "",
@@ -78,6 +79,9 @@ def _clean(data: dict) -> dict:
             v = v if v in ("free", "pro", "max") else "free"
         elif k == "decide_mode":
             v = v if v in ("both", "either") else "both"
+        elif k == "pace":
+            from . import render
+            v = v if v in render.PACE else "normal"
         elif k == "privacy":
             v = v if v in ("public", "unlisted", "private") else "public"
         else:

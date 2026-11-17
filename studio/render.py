@@ -24,6 +24,13 @@ HOOK = {"font": "Poppins ExtraBold", "size": 96, "ink": "14100E", "box": "FFFFFF
 FONT_FILES = {"Poppins ExtraBold": "Poppins-ExtraBold.ttf", "Anton": "Anton-Regular.ttf", "Archivo Black": "ArchivoBlack-Regular.ttf"}
 CAP_MAX_W = 960   # captions never run wider than this, whatever is said
 
+# Caption pacing: how long a line stays up after its last word is said (tail) and the least time it
+# shows at all (hold), so a short phrase never flashes past. A line never lingers until the next one
+# starts, so the words leave the screen with the speaker.
+PACE = {"slow": {"label": "Slow", "tail": 0.9, "hold": 1.6},
+        "normal": {"label": "Normal", "tail": 0.35, "hold": 1.0},
+        "fast": {"label": "Fast", "tail": 0.15, "hold": 0.5}}
+
 
 class _Font:
     """Measures text exactly as the renderer will draw it, so every word can be placed by hand: the highlighted
@@ -156,8 +163,9 @@ def _hook_events(hook, dur, y):
     return ev
 
 
-def build_ass(words, start, end, hook, style_name, highlight, hook_y, cap_y) -> str:
+def build_ass(words, start, end, hook, style_name, highlight, hook_y, cap_y, pace="normal") -> str:
     st = STYLES.get(style_name, STYLES["bounce"])
+    pc = PACE.get(pace, PACE["normal"])
     words = [dict(w, s=w["s"] - CAPTION_LEAD, e=w["e"] - CAPTION_LEAD) for w in words]
     strong = {_key(h) for h in highlight if _key(h)}
     head = f"""[Script Info]
@@ -185,7 +193,10 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     groups = _groups(inside, st["per"])
     for gi, g in enumerate(groups):
         g_start = max(0.0, g[0]["s"] - start)
-        g_end = min(g[-1]["e"] + 0.25, groups[gi + 1][0]["s"] if gi + 1 < len(groups) else end) - start
+        nxt = (groups[gi + 1][0]["s"] if gi + 1 < len(groups) else dur) - start
+        # the line leaves with the voice: a moment after its last word, held long enough to read,
+        # never reaching into the next line and never past the end of the clip
+        g_end = min(max(g[-1]["e"] + pc["tail"], g_start + pc["hold"]), nxt) - start
         if g_end - g_start < 0.02:
             continue
         texts = []
@@ -274,7 +285,7 @@ def render_clip(src: Path, out_dir: Path, name: str, clip: dict, words: list, sr
         layout = "crop"     # no webcam found: the game fills the screen, which is still the right shape
     hook_y = _hook_y(layout, hook_y, face)
     ass = build_ass(words if clip.get("captions", True) else [], start, end, clip.get("hook", ""), clip.get("style", "bounce"),
-                    clip.get("highlight_words", []), hook_y, cap_y)
+                    clip.get("highlight_words", []), hook_y, cap_y, clip.get("pace", "normal"))
     # The clip is made in a short work folder and moved into place afterwards. The caption step of ffmpeg cannot
     # open files whose full path is longer than 260 characters on Windows, which a data folder deep inside other
     # folders easily reaches. Inside the work folder every name is short and relative (a drive colon would also
