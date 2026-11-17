@@ -137,7 +137,8 @@ def main(data):
                   any(o["emoji"] == "🏎️" for o in with_e[1]) and any(o["emoji"] == "💰" for o in with_e[1]))
             car = next(o for o in with_e[1] if o["emoji"] == "🏎️")
             check("the emoji shows while its word is said", abs(car["s"] - 1.0) < 0.05)
-            check("the emoji sits next to its word, inside the frame", 0 < car["cx"] < 1080 and car["w"] > 20)
+            check("the emoji floats above its word, inside the frame", 0 < car["cx"] < 1080 and car["cy"] < 1480 and car["w"] > 20)
+            check("every related word in the line gets an emoji", {o["emoji"] for o in with_e[1]} == {"🏎️", "💰", "⚡"})
             check("emojis can be turned off", without_e[1] == [])
             check("the emoji is a painted picture, not a monochrome glyph in the text",
                   not any("🏎" in l or "💰" in l for l in cap_lines(with_e)))

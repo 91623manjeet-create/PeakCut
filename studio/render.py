@@ -59,7 +59,13 @@ EMOJIS = {"car": "🏎️", "drift": "🏎️", "drive": "🚗", "driving": "�
           "boat": "🚤", "ship": "🚢", "train": "🚂", "plane": "✈️", "bike": "🏍️", "house": "🏠",
           "mission": "🎯", "goal": "🎯", "level": "🎮", "new": "🆕", "first": "🥇", "best": "🥇",
           "party": "🎉", "dance": "💃", "music": "🎵", "wait": "⏳", "stop": "✋", "idea": "💡",
-          "talk": "💬", "chat": "💬", "say": "💬", "watch": "📺", "stream": "📺", "video": "📺"}
+          "talk": "💬", "chat": "💬", "say": "💬", "watch": "📺", "stream": "📺", "video": "📺",
+          "chase": "🚓", "chasing": "🚓", "wanted": "👮", "heist": "💰", "steal": "🦹", "stolen": "🦹",
+          "criminal": "🦹", "rob": "🦹", "robbery": "🦹", "escape": "🏃", "flee": "🏃",
+          "chopper": "🚁", "parachute": "🪂", "rooftop": "🏠", "crashed": "💥", "rocket": "🚀", "space": "🚀",
+          "boost": "⚡", "nitro": "⚡", "turbo": "⚡", "broke": "😢", "champion": "🏆", "goat": "🐐",
+          "noob": "🤡", "clown": "🤡", "grenade": "💣", "truck": "🚚", "vehicle": "🚗", "engine": "🚗",
+          "fuel": "⛽", "gas": "⛽", "beach": "🏖️", "mountain": "⛰️", "swimming": "🏊", "pool": "🏊"}
 
 
 def _is_emoji(ch):
@@ -282,10 +288,13 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         for x in g:
             t = re.sub(r"[.,;:]+$", "", x["w"])
             texts.append(t.upper() if st["upper"] else t)
-        hit = None      # one related emoji per line, riding on the word it matches
+        hits = []      # one related emoji above every word that means something, at most two a line
         if emoji:
-            hit = next((i for i, x in enumerate(g) if _key(re.sub(r"[.,;:]+$", "", x["w"])) in EMOJIS
-                        and not any(_is_emoji(c) for c in texts[i])), None)
+            for i, x in enumerate(g):
+                if _key(re.sub(r"[.,;:]+$", "", x["w"])) in EMOJIS and not any(_is_emoji(c) for c in texts[i]):
+                    hits.append(i)
+                    if len(hits) == 2:
+                        break
         if not all(roman.drawable(t) for t in texts):
             # A script the caption font cannot draw (Japanese, Thai, Chinese...): its words cannot be measured, so
             # they are not placed one by one. The line is drawn whole and centred, in a font the system has for it.
@@ -295,29 +304,29 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             continue
         size = st["size"]
         gap = f.width("n n", size) - 2 * f.width("n", size) + (2 * st["outline"] + 6) * size / st["size"]   # a space, plus room for both outlines
-        ew = 0 if hit is None else f.em(size)                       # the emoji gets a box one caption em tall
-        extra = gap + ew if hit is not None else 0
-        total = sum(f.width(t, size) for t in texts) + gap * (len(texts) - 1) + extra
+        total = sum(f.width(t, size) for t in texts) + gap * (len(texts) - 1)
         if total > CAP_MAX_W:                                  # a long phrase: shrink it to fit, never run off the frame
             size = max(36, int(size * CAP_MAX_W / total))
             gap = f.width("n n", size) - 2 * f.width("n", size) + (2 * st["outline"] + 6) * size / st["size"]   # a space, plus room for both outlines
-            ew = 0 if hit is None else f.em(size)
-            extra = gap + ew if hit is not None else 0
-            total = sum(f.width(t, size) for t in texts) + gap * (len(texts) - 1) + extra
+            total = sum(f.width(t, size) for t in texts) + gap * (len(texts) - 1)
         cy = cap_y - f.cap_shift(size)
+        ew = f.em(size) if hits else 0                         # each emoji floats above its word, one caption em tall
+        emoji_y = cy - f.em(size) * 0.40 - ew * 0.5            # centred on its word, sitting just on top of it
         x = (W - total) / 2
         p = st["pop"]
+        placed = []
         for i, (w, t) in enumerate(zip(g, texts)):
             wd = f.width(t, size)
-            if i == hit:      # the emoji takes the place after its word, and shows while that word is said
-                overlays.append({"emoji": EMOJIS[_key(re.sub(r"[.,;:]+$", "", w["w"]))],
-                                 "cx": x + wd + gap + ew / 2, "cy": cy, "w": ew,
-                                 "s": max(g_start, w["s"] - start), "e": g_end})
+            if i in hits:      # the emoji hovers above its word, on while that word is said
+                cx = x + wd / 2
+                if not placed or cx - placed[-1] >= ew * 0.75:  # two emojis never sit on top of each other
+                    overlays.append({"emoji": EMOJIS[_key(re.sub(r"[.,;:]+$", "", w["w"]))],
+                                     "cx": cx, "cy": emoji_y, "w": ew,
+                                     "s": max(g_start, w["s"] - start), "e": g_end})
+                    placed.append(cx)
             p = max(104, min(st["pop"], 100 + int(2200 / max(wd, 1))))   # long words grow less, so they never touch their neighbours
             pos = f"\\an5\\pos({x + wd / 2:.0f},{cy:.0f})\\fs{size}"
             x += wd + gap
-            if i == hit:
-                x += ew
             a = max(g_start, w["s"] - start)
             b = (g[i + 1]["s"] - start) if i + 1 < len(g) else g_end
             base = st["strong"] if _key(w["w"]) in strong else st["base"]
