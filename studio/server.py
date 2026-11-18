@@ -68,7 +68,13 @@ def _startup():
         print("\n  " + _tools.HELP + "\n", flush=True)
     if not transcribe.REMOTE and config.env("PEAKCUT_FETCH_MODEL", "1") != "0":     # the speech model: fetched now, in the background, if it was never downloaded
         from . import fetch_model
-        threading.Thread(target=lambda: _quiet(fetch_model.ensure), daemon=True).start()
+
+        def _prepare_speech():
+            _quiet(fetch_model.ensure)
+            if fetch_model.ready():      # read it into memory while the page is being looked at, not while a clip waits
+                _quiet(transcribe._recognizer)
+
+        threading.Thread(target=_prepare_speech, daemon=True).start()
     jobs.start()
     live.start()
     posting.start()

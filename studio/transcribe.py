@@ -11,16 +11,18 @@ import time
 import numpy as np
 
 from . import config
+from . import hardware
 
 _lock = threading.Lock()
 
 # Several copies of the speech model, each on a few cores, instead of one copy on all of them: one copy cannot keep
 # a big machine busy, and several videos transcribing at once would queue behind each other inside it. On a small
-# machine (under 8 cores) this is still a single copy, as before.
+# machine this is a single copy: measured on a 2-core laptop, two copies of it decoded slightly slower than one.
 _CPUS = os.cpu_count() or 4
+_CORES = hardware.physical_cores()
 PROVIDER = os.environ.get("PEAKCUT_ASR_PROVIDER", "cpu").strip().lower() or "cpu"      # "cuda" on a graphics card
-THREADS = int(os.environ.get("PEAKCUT_ASR_THREADS") or (4 if _CPUS >= 8 else max(2, _CPUS - 2)))
-COPIES = int(os.environ.get("PEAKCUT_ASR_COPIES") or (1 if PROVIDER != "cpu" else max(1, _CPUS // THREADS) if _CPUS >= 8 else 1))
+THREADS = int(os.environ.get("PEAKCUT_ASR_THREADS") or min(4, _CORES))
+COPIES = int(os.environ.get("PEAKCUT_ASR_COPIES") or (1 if PROVIDER != "cpu" else max(1, _CORES // THREADS)))
 _free: "queue.LifoQueue" = queue.LifoQueue()
 _made = 0
 

@@ -626,25 +626,38 @@ class Session:
     def _align(self, src, guess, dur):
         """Where `src` really starts on the transcript clock. The video pieces and the audio feed keep separate
         clocks that drift apart, so transcribe the clip's own audio and line its words up with the live words.
-        Local speech model only: no AI calls."""
+        Local speech model only: no AI calls.
+
+        Only a stretch of the clip is read: 20 seconds of it hold plenty of words to match, and on a small machine
+        reading a whole minute of it for every clip is minutes of work an evening. The rest is read only when that
+        stretch had too few words (a quiet opening, say)."""
         key = lambda w: re.sub(r"[^a-z0-9]", "", w.lower())
         try:
             wav = src.with_suffix(".wav")
             media.extract_audio(src, wav)
-            heard = transcribe.transcribe(media.load_audio(wav))
-            wav.unlink(missing_ok=True)
+            try:
+                audio = media.load_audio(wav)
+            finally:
+                wav.unlink(missing_ok=True)
             with self.lock:
                 near = [w for w in self.words if guess - 15 <= w["s"] <= guess + dur + 15]
-            diffs = []
-            for h in heard:
-                k = key(h["w"])
-                if len(k) < 3:
-                    continue
-                m = [w["s"] for w in near if key(w["w"]) == k and abs(w["s"] - (guess + h["s"])) < 8]
-                if m:
-                    diffs.append(min(m, key=lambda s: abs(s - (guess + h["s"]))) - h["s"])
-            if len(diffs) >= 4:
-                return float(np.median(diffs))
+            head = int(20 * SR)
+            windows = [(0, min(len(audio), head))]
+            if len(audio) > head:
+                windows.append((head, len(audio)))
+            for a0, b0 in windows:
+                heard = transcribe.transcribe(audio[a0:b0])
+                diffs = []
+                for h in heard:
+                    k = key(h["w"])
+                    if len(k) < 3:
+                        continue
+                    at = guess + a0 / SR + h["s"]          # where that word would sit on the live clock
+                    m = [w["s"] for w in near if key(w["w"]) == k and abs(w["s"] - at) < 8]
+                    if m:
+                        diffs.append(min(m, key=lambda s: abs(s - at)) - a0 / SR - h["s"])
+                if len(diffs) >= 4:
+                    return float(np.median(diffs))
         except Exception:  # noqa: BLE001 - fall back to the piece clock
             pass
         return guess
