@@ -13,7 +13,7 @@
   --brand:#FF8B33;--brand-press:#F27A1F;--brand-ink:#161014;--brand-soft:#241711;--brand-line:#3F2C1D;--brand-deep:#FFB27A;--on-soft:#FFC79D;
   --frame:#0C0C0F;--frame-2:#17171C;--frame-line:rgba(255,255,255,.07);--frame-text:#E8E8EB;--frame-dim:#8B8B96;
   --bg:#131318;--muted:#1C1C23;--line:#23232B;--line-2:#2F2F38;
-  --text:#ECECF0;--dim:#A3A3AD;--faint:#6C6C78;
+  --text:#ECECF0;--dim:#A3A3AD;--faint:#8A8A94;
   --good:#34D399;--good-soft:#12241B;--bad:#F87171;--bad-soft:#281517;--live:#E5323F;
   --r-lg:14px;--r:10px;--r-sm:7px;
   color-scheme:dark;
@@ -29,51 +29,62 @@ svg{width:18px;height:18px;flex:none;fill:currentColor}
 :focus-visible{outline:2px solid var(--brand);outline-offset:2px}
 ::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:var(--line);border-radius:999px;border:3px solid var(--muted)}
 
-/* ---------- frame */
-.app{display:grid;grid-template-columns:240px minmax(0,1fr);height:100vh}
-.side{background:var(--frame);color:var(--frame-text);display:flex;flex-direction:column;height:100vh;padding:14px 10px 12px;min-width:0}
-.side-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 4px 22px 6px}
-.side-head .logo{height:36px;width:auto;display:block}
-.side-head .mark{display:none;width:34px;height:34px}
+/* ---------- frame: one slim top bar, full-width content */
+.app{display:flex;flex-direction:column;height:100vh}
+main{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;background:transparent;min-width:0;scrollbar-gutter:stable}
+/* pages glide in instead of snapping */
+#view.page-in{animation:pageIn .32s cubic-bezier(.2,.7,.25,1) both}
+@keyframes pageIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
 .icon-btn{width:36px;height:36px;display:grid;place-items:center;border-radius:var(--r);border:0;background:transparent;color:var(--dim);cursor:pointer;flex:none}
-.side .icon-btn{color:var(--frame-dim)}
-.icon-btn:active{background:var(--muted)}.side .icon-btn:active{background:var(--frame-2)}
-.nav{display:flex;flex-direction:column;gap:2px;overflow-y:auto;flex:1;min-height:0;scrollbar-width:none}
-.nav::-webkit-scrollbar{display:none}
-.nav h4{font-size:12px;font-weight:500;color:var(--frame-dim);padding:14px 10px 4px}
-.nav-item{display:flex;align-items:center;gap:10px;width:100%;min-height:34px;padding:0 10px;border-radius:7px;border:0;background:transparent;color:var(--frame-text);font-size:14px;font-weight:500;cursor:pointer;text-align:left}
-.nav-item svg{width:17px;height:17px}
-.nav-item svg{color:var(--frame-dim)}
-.nav-item:active{background:var(--frame-2)}
-.nav-item.on{background:var(--brand);color:var(--brand-ink);font-weight:600}
-.nav-item.on svg{color:var(--brand-ink)}
-.label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.count{font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:rgba(255,255,255,.1);color:var(--frame-text);white-space:nowrap}
-.nav-item.on .count{background:rgba(22,16,10,.22);color:var(--brand-ink)}
+.icon-btn:active{background:var(--muted)}
+.appbar{display:flex;align-items:center;gap:10px;flex:none;height:56px;padding:0 14px;background:var(--frame);border-bottom:1px solid var(--line);position:relative;z-index:6}
+.appbar .brand{display:flex;align-items:center;flex:none;text-decoration:none}
+.appbar .logo{height:28px;width:auto;display:block}
+.topnav{display:flex;align-items:center;gap:4px;min-width:0;overflow-x:auto;scrollbar-width:none;flex:1}
+.topnav::-webkit-scrollbar{display:none}
+.tnav-item{display:flex;align-items:center;gap:8px;height:36px;padding:0 12px;border-radius:8px;border:0;background:transparent;color:var(--frame-text);font-size:14px;font-weight:500;cursor:pointer;text-decoration:none;white-space:nowrap;flex:none}
+.tnav-item svg{width:17px;height:17px;color:var(--frame-dim);flex:none}
+.tnav-item:hover{background:var(--frame-2)}
+.tnav-item.on{background:var(--brand);color:var(--brand-ink);font-weight:600}
+.tnav-item.on svg{color:var(--brand-ink)}
+.label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px}
+.count{font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:rgba(255,255,255,.1);color:var(--frame-text);white-space:nowrap;font-variant-numeric:tabular-nums}
+.tnav-item.on .count{background:rgba(22,16,10,.22);color:var(--brand-ink)}
+.tnav-item.on .working{background:rgba(22,16,10,.22);color:var(--brand-ink)}
+.working{margin-left:0}
+.tnav-dd{position:relative;flex:none}
+.tnav-menu{position:fixed;z-index:45;left:0;top:0;width:290px;max-width:min(340px,calc(100vw - 32px));max-height:min(60vh,480px);overflow-y:auto;background:var(--bg);border:1px solid var(--line-2);border-radius:12px;padding:6px}
+.tnav-menu button,.tnav-menu a{display:flex;align-items:center;gap:10px;width:100%;padding:9px 10px;border:0;border-radius:8px;background:transparent;color:var(--text);font-size:13px;font-weight:500;cursor:pointer;text-align:left;text-decoration:none}
+.tnav-menu button:hover,.tnav-menu a:hover{background:var(--muted)}
+.tnav-menu button.on{background:var(--brand-soft);color:var(--on-soft)}
+.tnav-menu button svg{width:17px;height:17px;color:var(--faint);flex:none}
+.tnav-menu button.on svg{color:var(--brand-deep)}
+.tnav-menu .sep{height:1px;background:var(--line);margin:6px 6px}
+.tnav-menu .tlabel{font-size:11px;font-weight:600;color:var(--faint);padding:8px 10px 4px;letter-spacing:.02em}
+.tnav-menu .live-dot{margin-left:auto}
+.top-end{display:flex;align-items:center;gap:6px;margin-left:auto;flex:none}
+.top-end .me{border:0;padding:0;margin:0}
+.me .who{display:none}
+.ai-card{display:flex;align-items:center;gap:8px;height:36px;padding:0 10px;border-radius:8px;border:1px solid var(--frame-line);background:var(--frame-2);color:var(--frame-text);cursor:pointer;flex:none}
+.ai-card .ai-ic{display:grid;place-items:center}
+.ai-card .ai-ic svg{width:17px;height:17px;color:var(--brand)}
+.ai-card small{font-size:10px;color:var(--frame-dim);font-weight:500;line-height:1.1}
+.ai-card b{font-size:12px;font-weight:600;color:var(--frame-text);letter-spacing:-.01em;line-height:1.1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:90px}
+.ai-card .ai-tx{display:flex;flex-direction:column;line-height:1.2}
+.ai-card:hover{background:var(--frame-2);border-color:var(--line-2)}
+.topbar{position:sticky;top:0;z-index:5;background:var(--bg);display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:10px 22px;min-height:52px;border-bottom:1px solid var(--line);transition:border-color .2s ease}
+#vbanner:empty{display:none}
 .avatar{width:26px;height:26px;border-radius:50%;background:rgba(255,139,51,.18);color:#FFB27A;display:grid;place-items:center;font-size:11px;font-weight:700;flex:none;overflow:hidden}
-img.avatar{object-fit:cover;background:rgba(255,255,255,.08)}
+img.avatar{object-fit:cover;background:rgba(255,139,51,.18)}
 .tav{width:34px;height:34px;border-radius:50%;object-fit:cover;flex:none;background:var(--muted)}
 #title{display:flex;align-items:center;gap:10px}
+.live-dot{width:8px;height:8px;border-radius:50%;background:var(--live);animation:pulse 1.3s infinite;flex:none}
 .chprev{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;background:var(--muted);animation:rise .25s ease both}
 .chprev img,.chprev .ph{width:44px;height:44px;border-radius:50%;object-fit:cover;flex:none;background:var(--muted)}
 .chprev b{display:block;font-size:14px;color:var(--text)}
 .chprev span{font-size:12px;color:var(--faint)}
 .chprev.bad{background:var(--bad-soft);color:#FF8A8A;font-size:13px}
 .chprev .sk{width:120px}
-.nav-item.on .avatar{background:var(--brand-ink);color:var(--brand)}
-.nav-item.on img.avatar{background:var(--brand-ink)}
-.live-dot{width:8px;height:8px;border-radius:50%;background:var(--live);animation:pulse 1.3s infinite;flex:none}
-.side-foot{display:flex;flex-direction:column;gap:2px;padding-top:12px;border-top:1px solid var(--frame-line)}
-.side-card{background:var(--frame-2);border-radius:var(--r);padding:12px 14px;margin-top:8px;font-size:12px;color:var(--frame-dim);display:flex;flex-direction:column;gap:7px}
-.side-card div{display:flex;align-items:center;gap:9px}
-.led{width:7px;height:7px;border-radius:50%;background:#3DDC97;flex:none}.led.no{background:#FF6B78}.led.mid{background:var(--brand)}
-.plans-btn{margin-top:10px;width:100%;background:var(--frame-text);color:var(--brand-ink);border:0}
-.scrim{display:none}
-
-main{background:var(--bg);margin:8px 8px 8px 0;border-radius:var(--r-lg);height:calc(100vh - 16px);overflow-y:auto;min-width:0;scrollbar-gutter:stable}
-.topbar{position:sticky;top:0;z-index:5;background:var(--bg);display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:10px 28px;min-height:54px;border-bottom:1px solid transparent;transition:border-color .2s ease}
-.topbar.stuck{border-color:var(--line)}
-#vbanner:empty{display:none}
 .upd{display:grid;gap:14px}
 .upd ul{margin:0;padding-left:18px;display:grid;gap:4px;font-size:13px;color:var(--text);max-height:180px;overflow:auto}
 .upd ul small{color:var(--dim)}
@@ -181,19 +192,18 @@ main{background:var(--bg);margin:8px 8px 8px 0;border-radius:var(--r-lg);height:
 .grow{flex:1}
 
 /* ---------- collapsed sidebar */
-.app.mini{grid-template-columns:76px minmax(0,1fr)}
-.app.mini .side-head{flex-direction:column;padding:2px 0 18px}
-.app.mini .side-head .logo{display:none}.app.mini .side-head .mark{display:block}
-.app.mini .label,.app.mini .count,.app.mini .nav h4,.app.mini .side-card,.app.mini .plans-btn{display:none}
-.app.mini .nav-item{justify-content:center;padding:0}
-.app.mini .nav-item .live-dot{position:absolute;margin:-20px -22px 0 0}
+
+
+
+
+
+
 .avatar.ring{border:2px solid #E5323F;padding:1px;background-clip:content-box}
 img.avatar.ring{background:transparent}
 .sb-tag{margin-left:auto;display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:#FF8A8A;background:rgba(229,50,63,.16);padding:1px 7px 1px 6px;border-radius:5px}
 .sb-tag i{width:6px;height:6px;border-radius:50%;background:currentColor;animation:pulse 1.3s infinite}
 .sb-tag.rec{background:#E5323F;color:#fff}
-.nav-item.on .sb-tag{background:#E5323F;color:#fff}
-.app.mini .sb-tag{display:none}
+
 
 /* ---------- buttons */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:38px;padding:0 14px;border-radius:var(--r);border:1px solid var(--line-2);background:var(--muted);color:var(--text);cursor:pointer;text-decoration:none;white-space:nowrap;font-weight:600}
@@ -334,8 +344,7 @@ label.ck input{accent-color:var(--brand);margin:0}
 @keyframes spin{to{transform:rotate(360deg)}}
 .working{margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--brand);background:rgba(255,139,51,.14);padding:2px 8px 2px 6px;border-radius:999px}
 .working i{width:10px;height:10px;border-radius:50%;border:2px solid currentColor;border-right-color:transparent;animation:spin .8s linear infinite}
-.nav-item.on .working{background:rgba(42,26,18,.14);color:var(--brand-ink)}
-.app.mini .nav-item .working{display:none}
+
 
 /* custom dropdown: a dark panel, no border or shadow needed against the white */
 .pick{position:relative}
@@ -633,7 +642,7 @@ dialog::backdrop{background:rgba(14,12,11,.42);animation:fadein .16s ease}
 
 .me{display:flex;align-items:center;gap:8px;padding:10px 2px 0 6px;margin-top:8px;border-top:1px solid var(--frame-line)}
 .me .me-pic{width:30px;height:30px;font-size:14px;object-fit:cover;text-shadow:0 1px 1px rgba(0,0,0,.15)}
-.me-btn{flex:1;min-width:0;display:flex;align-items:center;gap:9px;padding:4px;margin:-4px;border:0;border-radius:7px;background:transparent;color:inherit;text-align:left;cursor:pointer;transition:background-color .15s ease}
+.me-btn{flex:none;min-width:0;display:flex;align-items:center;gap:9px;padding:4px;margin:0;border:0;border-radius:7px;background:transparent;color:inherit;text-align:left;cursor:pointer;transition:background-color .15s ease}
 .me-btn:hover,.me-btn[aria-expanded=true]{background:var(--frame-2)}
 .bell{position:relative}
 .bell .dotn{position:absolute;top:2px;right:1px;min-width:17px;height:17px;padding:0 4px;border-radius:999px;background:#E5323F;color:#fff;font-size:10px;font-weight:700;display:grid;place-items:center;border:2px solid var(--frame)}
@@ -665,21 +674,13 @@ dialog::backdrop{background:rgba(14,12,11,.42);animation:fadein .16s ease}
 .pop.menu .who2{padding:8px 10px 10px;border-bottom:1px solid var(--line);margin-bottom:4px}
 .pop.menu .who2 b{display:block;font-size:13px;color:var(--text)}.pop.menu .who2 span{font-size:12px;color:var(--faint);overflow-wrap:anywhere}
 .pop.menu .danger{color:#FF8A8A}.pop.menu .danger svg{color:#FF8A8A}
-.me .who{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.3}
 .me .who b{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .me .who span{font-size:12px;color:var(--frame-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.app.mini .me .who{display:none}.app.mini .me{flex-direction:column;padding:10px 0 0}
+
 
 /* ---------- AI status and usage */
-.ai-card{display:flex;align-items:center;gap:10px;width:100%;margin-top:6px;padding:8px;border-radius:8px;background:var(--frame-2);border:1px solid transparent;color:var(--frame-text);cursor:pointer;text-align:left}
-.ai-card .ai-ic{flex:none;width:30px;height:30px;border-radius:7px;display:grid;place-items:center;background:rgba(255,139,51,.16);color:var(--brand)}
-.ai-card .ai-ic svg{width:18px;height:18px}
-.ai-card .ai-tx{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.25}
-.ai-card small{font-size:12px;color:var(--frame-dim);font-weight:500}
-.ai-card b{font-size:14px;font-weight:600;letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ai-card .ai-n{font-size:12px;color:var(--frame-dim);white-space:nowrap;font-variant-numeric:tabular-nums}
-.app.mini .ai-card{justify-content:center;padding:6px 0;background:transparent;border-color:transparent}
-.app.mini .ai-card .ai-tx,.app.mini .ai-card .ai-n{display:none}
+
+
 .ai-home{display:flex;flex-direction:column;background:var(--muted);color:var(--text);border-color:var(--line)}
 .ai-home h2{font-size:13px;font-weight:500;color:var(--dim);margin-bottom:6px}
 .ai-big{font-size:28px;font-weight:600;letter-spacing:-.02em;color:var(--text);line-height:1.15;overflow-wrap:anywhere}
@@ -711,17 +712,17 @@ input[type=range]::-moz-range-thumb{width:12px;height:12px;border-radius:50%;bac
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* ---------- motion and hover: colour only, never size */
-.btn,.nav-item,.chip,.step,.tabbtn,.icon-btn,label.ck,.clip,a.lnk,.ai-card,.veil span,td,label.sw input{transition:background-color .15s ease,border-color .15s ease,color .15s ease}
+.btn,.tnav-item,.chip,.step,.tabbtn,.icon-btn,label.ck,.clip,a.lnk,.ai-card,.veil span,td,label.sw input{transition:background-color .15s ease,border-color .15s ease,color .15s ease}
 .btn:hover{background:var(--muted);border-color:var(--line-2)}
 .btn.primary:hover{background:#FF9A4C;border-color:#FF9A4C}
 .btn.dark:hover{background:#3A2C25;border-color:#3A2C25}
 .btn.danger:hover{background:var(--bad-soft)}
 .btn.ghost:hover{background:var(--muted);border-color:transparent;color:var(--text)}
 
-.nav-item:hover{background:var(--frame-2)}
-.nav-item.on:hover{background:#FF9A4C}
+.tnav-item:hover{background:var(--frame-2)}
+.tnav-item.on:hover{background:#FF9A4C}
 .icon-btn:hover{background:var(--muted);color:var(--text)}
-.side .icon-btn:hover{background:var(--frame-2);color:var(--frame-text)}
+
 .chip:hover{background:var(--muted);color:var(--text)}
 .chip.on:hover,.pick.open .chip:hover{background:#2A1C12;color:#FFB27A}
 .step:hover{background:var(--muted)}
@@ -733,24 +734,18 @@ a.lnk:hover{color:var(--brand-deep)}
 tr:hover>td{background:var(--muted)}
 .ai-card:hover{background:var(--line-2)}
 .ai-card.on{border-color:rgba(255,139,51,.5)}
-.app.mini .ai-card:hover{background:var(--frame-2)}
+
 dialog[open]{animation:fadein .16s ease}
 @keyframes fadein{from{opacity:0}}
 
 /* ---------- responsive */
 @media (max-width:1100px){.tiles,.tiles.five{grid-template-columns:repeat(2,minmax(0,1fr))}.home-grid,.split{grid-template-columns:1fr}}
 @media (max-width:900px){
-  .app,.app.mini{grid-template-columns:1fr}
-  .side{position:fixed;inset:0 auto 0 0;width:280px;z-index:30;transform:translateX(-100%);transition:transform .2s ease}
-  .app.open .side{transform:none}
-  .app.open .scrim{display:block;position:fixed;inset:0;background:rgba(30,22,18,.5);z-index:25}
-  .app.mini .side-head .logo{display:block}.app.mini .side-head .mark{display:none}
-  .app.mini .label,.app.mini .count,.app.mini .nav h4{display:revert}.app.mini .ai-card .ai-tx,.app.mini .me .who{display:flex}.app.mini .ai-card .ai-n{display:inline}.app.mini .me{flex-direction:row;padding:10px 4px 0 8px}.app.mini .ai-card{justify-content:flex-start;padding:12px;background:var(--frame-2)}
-  .side-head .collapse{display:none}
   main{margin:0;border-radius:0;height:100vh}
-  .icon-btn.menu{display:grid}
   .topbar{padding:10px 16px;min-height:52px}
   .hero{padding:32px 16px 40px}
+  .topnav{gap:2px}
+  .tnav-item .label{max-width:none}
   .content{padding:20px 16px 56px}
   .editor{grid-template-columns:1fr;overflow:auto}.editor video{max-height:52vh}
 }
@@ -816,26 +811,43 @@ dialog[open]{animation:fadein .16s ease}
 }
 
 /* ---------- dark studio: pro tools feel */
-h1,h2,h3,h4{font-family:"JetBrains Mono","SFMono-Regular",Consolas,monospace;letter-spacing:-.02em}
-.count,.du,code,kbd,.timer,time{font-family:"JetBrains Mono","SFMono-Regular",Consolas,monospace}
+/* ambient background: a slow-breathing ember and a drifting dot grid */
+.bgfx{position:fixed;inset:0;z-index:0;overflow:hidden;background:var(--frame);pointer-events:none}
+.bgfx::before{content:"";position:absolute;inset:-15%;background:
+  radial-gradient(48vw 46vh at 16% 8%, rgba(255,139,51,.22), transparent 60%),
+  radial-gradient(42vw 42vh at 84% 82%, rgba(74,59,245,.16), transparent 62%),
+  radial-gradient(30vw 30vh at 78% 12%, rgba(255,178,122,.11), transparent 60%);
+  animation:bgGlow 38s ease-in-out infinite alternate}
+.bgfx::after{content:"";position:absolute;inset:0;background-image:radial-gradient(rgba(255,255,255,.08) 1.1px, transparent 1.1px);background-size:24px 24px;opacity:.6;animation:bgGrid 52s linear infinite}
+@keyframes bgGlow{from{transform:translate3d(0,0,0) scale(1)}to{transform:translate3d(-4%,3%,0) scale(1.13)}}
+@keyframes bgGrid{from{background-position:0 0}to{background-position:240px 240px}}
+/* frosted glass edges of the app chrome */
+.appbar{background:rgba(12,12,15,.88)}
+.topbar{background:rgba(19,19,24,.86)}
+.tnav-menu,.pop{background:rgba(19,19,24,.8)}
+@supports (backdrop-filter: blur(8px)) {
+  .appbar{background:rgba(12,12,15,.68);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+  .topbar{background:rgba(19,19,24,.62);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+  .tnav-menu,.pop{background:rgba(19,19,24,.78);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+}
+h1,h2,h3,h4{font-family:"Cascadia Mono",Consolas,"JetBrains Mono","SFMono-Regular",monospace;letter-spacing:-.02em}
+.count,.du,code,kbd,.timer,time{font-family:"Cascadia Mono",Consolas,"JetBrains Mono","SFMono-Regular",monospace;font-variant-numeric:tabular-nums}
 body{background:var(--frame)}
-.chip,.btn,.tabbtn,.nav-item{transition:background-color .15s ease,color .15s ease,border-color .15s ease}
+.chip,.btn,.tabbtn,.tnav-item{transition:background-color .15s ease,color .15s ease,border-color .15s ease}
 :focus-visible{outline:2px solid var(--brand);outline-offset:2px;border-radius:4px}
 ::-webkit-scrollbar-thumb{background:#2E2E38;border:3px solid transparent;background-clip:padding-box}
 </style>
 </head>
 <body>
+<div class="bgfx" aria-hidden="true"></div>
 <div class="app" id="app">
-  <aside class="side" aria-label="Sidebar">
-    <div class="side-head"><img class="logo" src="/brand/logo-light.svg" alt="PeakCut"><img class="mark" src="/brand/favicon.svg" alt="PeakCut">
-      <button class="icon-btn collapse" data-act="collapse" id="collapseBtn" aria-label="Collapse sidebar"></button></div>
-    <nav class="nav" id="nav" aria-label="Main"></nav>
-    <div class="side-foot" id="foot"></div>
-  </aside>
-  <div class="scrim" data-act="menu"></div>
+  <header class="appbar">
+    <a class="brand" href="/app" aria-label="PeakCut"><img class="logo" src="/brand/logo-light.svg" alt="PeakCut"></a>
+    <nav class="topnav" id="nav" aria-label="Main"></nav>
+    <div class="top-end" id="foot"></div>
+  </header>
   <main id="main">
-    <header class="topbar"><button class="icon-btn menu" data-act="menu" id="menuBtn" aria-label="Open menu"></button>
-      <span id="tpic"></span><div class="titles"><h1 id="title"></h1><p id="subtitle"></p></div><nav class="utabs" id="utabs" role="tablist" aria-label="Creator sections"></nav><div class="row" id="actions"></div></header>
+    <header class="topbar"><span id="tpic"></span><div class="titles"><h1 id="title"></h1><p id="subtitle"></p></div><nav class="utabs" id="utabs" role="tablist" aria-label="Creator sections"></nav><div class="row" id="actions"></div></header>
     <div id="vbanner"></div>
     <div id="heroSlot"></div>
     <div class="content" id="view"></div>
@@ -955,13 +967,13 @@ function startTour() {
     {t: "Your day at a glance", x: "Home shows what is recording, how many clips were made and posted today, and what is waiting to go out.",
      sel: "#ov .tiles", dock: "bottom", chips: [["radio", "Recording"], ["scissors", "Clips today", 1], ["send", "Posted"], ["clock", "Waiting"]]},
     {t: "Every video in one place", x: "All videos lists everything you have processed. Open a video to see its clips, trim them, change the captions or download them.",
-     sel: '#nav [data-v="library"]', side: 1, dock: "bottom", chips: [["film", "All videos", 1], ["play", "Preview"], ["sliders", "Edit"], ["down", "Download"]]},
-    {t: "Add the creators you clip", x: "Give each creator a workspace with their channels. PeakCut can record them when they go live and clip the highlights as they happen.",
-     sel: '#nav [data-act="newcreator"]', side: 1, dock: "bottom", chips: [["plusc", "New creator", 1], ["radio", "Record live"], ["bolt", "Clip highlights"]]},
+     sel: '#nav [data-v="library"]', dock: "bottom", chips: [["film", "All videos", 1], ["play", "Preview"], ["sliders", "Edit"], ["down", "Download"]]},
+    {t: "Add the creators you clip", x: "Open Creators in the top bar. Each one gets their own settings, folder and live stream. New creators go there too.",
+     sel: '#nav [data-act="creatorsdd"]', dock: "bottom", chips: [["users", "Creators", 1], ["plusc", "New creator"], ["radio", "Record live"], ["bolt", "Clip highlights"]]},
     {t: "The AI picks the moments", x: "This shows which AI this server uses and how much it has worked today. Open it to see what the AI was used for.",
-     sel: "#foot .ai-card", side: 1, dock: "top", chips: [["bolt", "AI", 1], ["chart", "See usage"]]},
-    {t: "Your account and alerts", x: "The bell tells you when clips are ready or a recording ends. Your name opens Settings, where you connect the accounts you post to.",
-     sel: "#foot .me", side: 1, dock: "top", chips: [["bell", "Notifications", 1], ["cog", "Settings"], ["plug", "Connect accounts"]]},
+     sel: "#foot .ai-card", dock: "top", chips: [["bolt", "AI", 1], ["chart", "See usage"]]},
+    {t: "Your account and alerts", x: "The bell tells you when clips are ready or a recording ends. Your avatar opens Settings, where you connect the accounts you post to.",
+     sel: "#foot .me", dock: "top", chips: [["bell", "Notifications", 1], ["cog", "Settings"], ["plug", "Connect accounts"]]},
     {t: "You're ready to clip", x: "Everything you make here is private to your account. Paste your first link and press Make clips.",
      chips: [["link", "Paste a link"], ["scissors", "Make clips", 1]]}];
 
@@ -1016,7 +1028,7 @@ function startTour() {
 
   function show(first) {
     const s = steps[i], last = i === steps.length - 1;
-    app.classList.toggle("open", !!s.side && innerWidth <= 900);                     // phones: slide the sidebar in for its steps
+    app.classList.remove("open");                     // the sidebar is gone; the tour never dims the top bar
     const chips = $(".tr-chips", root);
     chips.innerHTML = s.chips.map(([icon, label, on]) => `<span class="tr-chip ${on ? "on" : ""}">${ic(icon)}${esc(label)}</span>`).join("");
     $("#trT").textContent = s.t; $("#trP").textContent = s.x;
@@ -1065,6 +1077,7 @@ function startTour() {
 /* ============================================================ state */
 const S = {status:{styles:{}, layouts:{}}, jobs:[], creators:[], accounts:[], overview:null, settings:null,
            view:"overview", ctab:"clips"};
+let creatorsOpen = false;   // the creators dropdown in the top bar, kept across the 1 s re-render
 const D = {jid:null, cid:null, sig:""};
 const creatorId = () => S.view.startsWith("c:") ? S.view.slice(2) : null;
 const creator = () => S.creators.find(c => c.id === creatorId());
@@ -1150,10 +1163,14 @@ function closePops(except) { ["bellpop", "acctpop"].forEach(id => { const p = $(
   $$('[data-act="acctmenu"]').forEach(b => b.setAttribute("aria-expanded", String(except?.id === "acctpop"))); }
 function openPop(p, anchor) {
   closePops(p); p.hidden = false;
-  // beside the sidebar, bottom lined up with the button that opened it
-  const side = $(".side").getBoundingClientRect(), a = anchor?.getBoundingClientRect();
-  if (innerWidth > 900) { p.style.left = side.right + 8 + "px"; p.style.bottom = Math.max(12, innerHeight - (a ? a.bottom + 6 : side.bottom - 12)) + "px"; }
-  else { p.style.left = ""; p.style.bottom = ""; }
+  // hang the menu under whatever button opened it
+  const a = anchor?.getBoundingClientRect();
+  if (a && innerWidth > 560) {
+    p.style.left = "auto";
+    p.style.bottom = "auto";
+    p.style.top = Math.round(a.bottom + 10) + "px";
+    p.style.right = Math.max(12, Math.round(innerWidth - a.right)) + "px";
+  } else { p.style.left = "12px"; p.style.bottom = "12px"; p.style.top = "auto"; p.style.right = "auto"; }
   requestAnimationFrame(() => p.classList.add("open"));
 }
 async function openBell() {
@@ -1181,8 +1198,11 @@ function openAcct() {
     ${on ? `<button class="danger" data-act="logout">${ic("signout")}Sign out</button>` : ""}`;
   openPop(p, $("[data-act=acctmenu]"));
 }
-document.addEventListener("click", e => { if (!e.target.closest(".pop, [data-act=bell], [data-act=acctmenu]")) closePops(); });
-document.addEventListener("keydown", e => { if (e.key === "Escape") closePops(); });
+document.addEventListener("click", e => {
+  if (!e.target.closest(".pop, [data-act=bell], [data-act=acctmenu]")) closePops();
+  if (!e.target.closest("#creatorsdd, #creatorsMenu") && creatorsOpen) { creatorsOpen = false; $("#creatorsMenu")?.setAttribute("hidden", ""); $('[data-act="creatorsdd"]')?.setAttribute("aria-expanded", "false"); }
+});
+document.addEventListener("keydown", e => { if (e.key === "Escape") { closePops(); if (creatorsOpen) { creatorsOpen = false; $("#creatorsMenu")?.setAttribute("hidden", ""); $('[data-act="creatorsdd"]')?.setAttribute("aria-expanded", "false"); } } });
 /* new notifications pop up as a small card with a soft chime */
 let lastNotice = Number(localStorage.getItem("lastNotice") || 0), chimeCtx = null;
 function chime() {
@@ -1257,16 +1277,24 @@ function moveInd() {
   requestAnimationFrame(() => { ind.style.width = w + "px"; ind.style.transform = `translateX(${x}px)`; });
   lastInd = {x, w};
 }
-function drawShell() {  const nav = (v, icon, label, extra = "") => `<button class="nav-item ${S.view === v ? "on" : ""}" data-act="go" data-v="${esc(v)}" title="${esc(label)}">${icon}<span class="label">${esc(label)}</span>${extra}</button>`;
-  put($("#nav"), nav("overview", navIc("home", "overview"), "Home") +
-    nav("library", navIc("film", "library"), "All videos", (() => { const w = S.jobs.filter(j => ["queued", "running"].includes(j.status)).length;
-      return w ? `<span class="working" title="${w} working now"><i></i>${w} working</span>` : S.jobs.length ? `<span class="count">${S.jobs.length}</span>` : ""; })()) +
-    `<h4><span>Creators</span></h4>` +
-    S.creators.map(c => nav("c:" + c.id, cav(c), c.name,
-      c.live_job ? `<span class="sb-tag rec" title="Recording now"><i></i>Rec</span>`
-        : liveOn(c).length ? `<span class="sb-tag" title="Live on ${esc(liveOn(c).map(([k]) => PLAT[k].name).join(" and "))}"><i></i>Live</span>` : "")).join("") +
-    `<button class="nav-item" data-act="newcreator" title="New creator">${ic("plusc")}<span class="label">New creator</span></button>` +
-    (S.status.user?.role === "admin" && S.status.accounts !== false ? `<h4><span>Owner</span></h4><a class="nav-item" href="/admin" title="Admin dashboard" style="text-decoration:none">${ic("shield")}<span class="label">Admin dashboard</span></a>` : ""));
+function drawShell() {
+  const creatorsOpenNow = creatorsOpen;
+  const nav = (v, icon, label, extra = "") => `<button class="tnav-item ${S.view === v ? "on" : ""}" data-act="go" data-v="${esc(v)}" title="${esc(label)}">${icon}<span class="label">${esc(label)}</span>${extra}</button>`;
+  const wid = S.jobs.filter(j => ["queued", "running"].includes(j.status)).length;
+  const cn = S.creators.find(c => S.view === "c:" + c.id);
+  const ddOpen = !!creatorsOpenNow;
+  const badge = c => c.live_job ? `<span class="sb-tag rec" title="Recording now"><i></i>Rec</span>`
+    : liveOn(c).length ? `<span class="sb-tag" title="Live on ${esc(liveOn(c).map(([k]) => PLAT[k].name).join(" and "))}"><i></i>Live</span>` : "";
+  const menuItems = S.creators.map(c => `<button data-act="go" data-v="c:${esc(c.id)}" class="${S.view === "c:" + c.id ? "on" : ""}" role="menuitem">${cav(c)}<span class="label" style="flex:1">${esc(c.name)}</span>${badge(c)}</button>`).join("")
+    + `<div class="sep"></div><button data-act="newcreator" role="menuitem">${ic("plusc")}<span class="label" style="flex:1">New creator</span></button>`
+    + (S.status.user?.role === "admin" && S.status.accounts !== false ? `<a href="/admin" role="menuitem">${ic("shield")}<span class="label" style="flex:1">Admin dashboard</span></a>` : "");
+  put($("#nav"), nav("overview", navIc("home", "overview"), "Home")
+    + nav("library", navIc("film", "library"), "All videos",
+        wid ? `<span class="working" title="${wid} working now"><i></i>${wid} working</span>` : S.jobs.length ? `<span class="count">${S.jobs.length}</span>` : "")
+    + `<div class="tnav-dd">
+         <button class="tnav-item ${cn ? "on" : ""}" data-act="creatorsdd" aria-haspopup="menu" aria-expanded="${ddOpen}" title="Creators">${ic("users")}<span class="label">${cn ? esc(cn.name) : "Creators"}</span>${cn ? badge(cn) : `<span class="count">${S.creators.length}</span>`}${ic("down")}</button>
+         <div class="tnav-menu" id="creatorsMenu" role="menu" ${ddOpen ? "" : "hidden"}>${menuItems}</div>
+       </div>`);
   const st = S.status;
   const k = S.status.ai;
   put($("#foot"), (k ? `<button class="ai-card ${S.view === "usage" ? "on" : ""}" data-act="go" data-v="usage" title="${k.ready ? `AI: ${esc(k.provider || "ready")}, ${k.today_calls || 0} calls today` : "The AI is not set up"}">
@@ -1292,11 +1320,7 @@ function drawShell() {  const nav = (v, icon, label, extra = "") => `<button cla
     act = c.live_job ? `<button class="btn danger" data-act="stoplive" data-j="${esc(c.live_job)}">${ic("stop")}Stop recording</button>`
                      : `<button class="btn primary" data-act="golive"><span class="rdot"></span>${liveOn(c).length ? "Record live stream" : "Start recording"}</button>`;
   }
-  if (S.view === "overview" || S.view === "library") {
-    const L = S.status.links || {};
-    act = (L.repo ? `<a class="btn" href="${esc(L.repo)}" target="_blank" rel="noopener" title="Star PeakCut on GitHub">${ic("github")}<span>Star<span class="long"> on GitHub</span></span></a>` : "")
-        + (L.follow ? `<a class="btn primary" href="${esc(L.follow)}" target="_blank" rel="noopener" title="Follow the maker of PeakCut on Instagram">${ic("instagram")}Follow me</a>` : "");
-  }
+  // The Star on GitHub and Follow me buttons are gone: they promoted the upstream author, not the user.
   const me = S.status.user;
   const kk = S.status.ai;
   const up = S.status.update;
@@ -1339,7 +1363,7 @@ function go(v, tab, fromHistory) {
   if (v === "settings") S.stab = setTabs().some(x => x[0] === tab) ? tab : setTabs()[0][0];
   if (!fromHistory) remember(v, v.startsWith("c:") ? S.ctab : v === "settings" ? S.stab : null);
   localStorage.setItem("view", v);
-  $("#app").classList.remove("open");
+
   const view = $("#view");
   if (window._gaStop) { window._gaStop(); window._gaStop = null; }
   $("#heroSlot").innerHTML = v === "overview" ? `<section class="hero"><div class="ga-bg" id="appAscii" aria-hidden="true"></div><h2>What do you want to clip today?</h2>
@@ -1349,6 +1373,8 @@ function go(v, tab, fromHistory) {
   else if (v === "settings") view.innerHTML = `<div id="sform"></div>`;
   else if (v === "usage") { view.innerHTML = `<div id="usage"></div>`; loadUsage(); }
   else view.innerHTML = `<div id="stream"></div><div id="cbody"></div>`;   // the live player stays put across tabs: no restart, no rebuffer
+  // every page glides in instead of snapping into place
+  view.classList.remove("page-in"); void view.offsetWidth; view.classList.add("page-in");
   if ($("#add")) drawAdd(v === "overview" ? "hero" : "compact");
   if (v === "overview" && window.GradientASCII) { try { window._gaStop = GradientASCII($("#appAscii"), {colors: ["#ffb27a", "#ffffff", "#ffd2ae", "#ffe0c2", "#fff1e6"], shape: "horizon", lightMode: true, cellSize: 16, density: 0.8, glyphOpacity: 0.26, gradientOpacity: 0.32, glow: 0.06, grain: 0.06, mouseInteraction: false, clickEffect: "none"}); } catch {} }
   if (v === "settings") drawSettings();
@@ -2325,6 +2351,8 @@ document.addEventListener("change", async e => {
 
 document.addEventListener("click", async e => {
   const b = e.target.closest("[data-act]"); if (!b) return;
+  const ddItem = b.closest("#creatorsMenu");
+  if (ddItem && creatorsOpen) { creatorsOpen = false; ddItem.hidden = true; }
   const a = b.dataset.act, d = b.dataset;
   if (b.tagName === "A") e.preventDefault();
   try {
@@ -2351,8 +2379,7 @@ document.addEventListener("click", async e => {
       } finally { b.disabled = false; }
       return;
     }
-    if (a === "menu") return $("#app").classList.toggle("open");
-    if (a === "collapse") { const m = $("#app").classList.toggle("mini"); try { localStorage.setItem("mini", m ? "1" : ""); } catch {} return; }
+    if (a === "creatorsdd") { creatorsOpen = !creatorsOpen; const m = $("#creatorsMenu"); if (m) { m.hidden = !creatorsOpen; b.setAttribute("aria-expanded", String(creatorsOpen)); if (creatorsOpen) { const r = b.getBoundingClientRect(); m.style.left = Math.max(8, Math.min(r.left, innerWidth - m.offsetWidth - 8)) + "px"; m.style.top = (r.bottom + 8) + "px"; } } return; }
     if (a === "toggleopts") { const p = $(".composer-opts"), open = !p.classList.contains("open"); p.classList.toggle("open", open); p.inert = !open; b.classList.toggle("on", open); b.setAttribute("aria-expanded", String(open)); return; }
     if (a === "focusurl") return $("#url")?.focus();
     if (a === "step") {
@@ -2545,8 +2572,8 @@ document.addEventListener("click", async e => {
   } catch (err) { b.disabled = false; toast(err.message, "bad"); }
 });
 
-$("#collapseBtn").innerHTML = ic("sidebar"); $("#menuBtn").innerHTML = ic("menu");
-try { if (localStorage.getItem("mini")) $("#app").classList.add("mini"); } catch {}
+
+
 $("#main").addEventListener("scroll", () => $(".topbar").classList.toggle("stuck", $("#main").scrollTop > 4), {passive:true});
 (async () => {
   try { S.status = await api("/api/status"); } catch {}
@@ -2573,5 +2600,9 @@ $("#main").addEventListener("scroll", () => $(".topbar").classList.toggle("stuck
 </script>
 </body>
 </html>
+
+
+
+
 
 

@@ -1,4 +1,4 @@
-"""Checks the real pages in a real browser, because a page can look fine in the source and still break.
+﻿"""Checks the real pages in a real browser, because a page can look fine in the source and still break.
 
     python tests/test_browser.py <base url> [screenshots folder]
 
@@ -90,10 +90,10 @@ with sync_playwright() as pw:
     check("signing up lands in the app", arrived and page.url.startswith(BASE + "/app"),
           f"{page.url} {page.locator('#err').inner_text() if page.locator('#err').count() else ''}")
     try:
-        page.wait_for_selector("#nav button.nav-item", timeout=15000)
+        page.wait_for_selector("#nav button.tnav-item", timeout=15000)
     except Exception:  # noqa: BLE001
         pass
-    check("the menu is there", page.locator("#nav button.nav-item").count() > 0, page.locator("#nav").inner_text()[:120])
+    check("the menu is there", page.locator("#nav button.tnav-item").count() > 0, page.locator("#nav").inner_text()[:120])
     check("the video link box is there", page.locator("#url").count() == 1)
     page.screenshot(path=str(SHOTS / "2-app-home.png"))
 
@@ -121,12 +121,12 @@ with sync_playwright() as pw:
     # ---- moving around the app does not throw anything away
     page.reload(wait_until="domcontentloaded")
     try:
-        page.wait_for_selector("#nav button.nav-item", timeout=15000)
+        page.wait_for_selector("#nav button.tnav-item", timeout=15000)
         drawn = True
     except Exception:  # noqa: BLE001
         drawn = False
     check("a reload stays signed in", page.url.startswith(BASE + "/app"), page.url)
-    check("the menu survives a reload", drawn and page.locator("#nav button.nav-item").count() > 0,
+    check("the menu survives a reload", drawn and page.locator("#nav button.tnav-item").count() > 0,
           page.locator("#nav").inner_text()[:120])
 
     # ---- a page for someone who is not signed in
@@ -145,3 +145,4 @@ check("the browser logged no errors", not console_errors, "; ".join(console_erro
 check("no request failed", not failed_requests, "; ".join(failed_requests[:3]))
 print(f"({len(blocked)} outside requests blocked; screenshots in {SHOTS})")
 sys.exit(1 if fails else 0)
+
